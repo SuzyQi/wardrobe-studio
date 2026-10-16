@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f7f5f0">
+  <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
+  <title>衣橱间 · Wardrobe Studio</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./core.js" defer></script>
+  <script src="./storage.js" defer></script>
+  <script src="./images.js" defer></script>
+  <script src="./demo.js" defer></script>
+  <script src="./app.js" defer></script>
+</head>
+<body>
+<svg class="icon-definitions" aria-hidden="true"><defs>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-hanger" viewBox="0 0 24 24"><path d="M9 7a3 3 0 1 1 5 2.2L12 11v2M12 13l9 5a1 1 0 0 1-.5 2h-17a1 1 0 0 1-.5-2z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8Z"/></symbol>
+  <symbol id="i-edit" viewBox="0 0 24 24"><path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15z"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v5a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M8 5 3 10l5 5M4 10h10a7 7 0 0 1 7 7v2"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 2v20M8 5 2 19h6zm8 0 6 14h-6z"/></symbol>
+  <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.2"/></symbol>
+</defs></svg>
+<a class="skip-link" href="#workspace">跳到我的衣橱</a>
+<header class="site-header">
+  <a class="brand" href="./" aria-label="衣橱间首页"><span class="brand-mark"><svg class="icon"><use href="#i-hanger"/></svg></span><span>衣橱间<small>WARDROBE STUDIO</small></span></a>
+  <nav class="main-nav" aria-label="页面"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button></nav>
+  <div class="header-actions"><button class="button ghost backup-button" id="open-backup"><svg class="icon"><use href="#i-download"/></svg><span>备份</span></button><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg><span>添加衣服</span></button></div>
+</header>
+<main>
+  <section class="intro"><div><p class="eyebrow">A LITTLE SPACE, ALL YOURS</p><h1>把喜欢的衣服，<em>穿在一起。</em></h1><p class="intro-copy">慢慢收藏，随心搭配。每一件喜欢，都有新的可能。</p></div><div class="intro-note"><span class="note-flower">✳</span><span>穿衣服，也是一件<br>让自己开心的小事。</span></div></section>
+  <section id="workspace" class="workspace" aria-label="我的衣橱与搭配画布">
+    <div class="closet-panel">
+      <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>我的衣橱 <span class="count" id="garment-count">0</span></h2></div><button id="favorite-filter" class="icon-button" aria-label="只看收藏" aria-pressed="false" title="只看收藏"><svg class="icon"><use href="#i-heart"/></svg></button></div>
+      <div class="closet-controls"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="找一件衣服、一个颜色…" aria-label="搜索衣服"></label><select id="sort" aria-label="单品排序"><option value="newest">最近添加</option><option value="name">名称顺序</option><option value="category">按分类</option></select></div>
+      <div id="category-tabs" class="category-tabs" aria-label="衣服分类"></div>
+      <p id="filter-summary" class="filter-summary" hidden></p>
+      <div id="garment-grid" class="garment-grid" aria-live="polite"></div>
+      <div id="closet-empty" class="empty-state" hidden><div class="empty-closet" aria-hidden="true"><div class="rail"><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg></div></div><h3>从一件喜欢的衣服开始</h3><p>一次选多张照片，名字以后再想。<br>PNG、JPG、WebP 都可以放进来。</p><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg>上传我的衣服</button><button class="text-button" id="load-demo">先用 8 件示例试搭 <span aria-hidden="true">↗</span></button></div>
+      <div id="no-results" class="empty-state small-empty" hidden><svg class="icon"><use href="#i-search"/></svg><h3>暂时没有找到这件衣服</h3><p>试试别的关键词，或清除筛选。</p><button class="button secondary" id="reset-filters">显示全部衣服</button></div>
+      <p class="closet-tip" id="closet-tip" hidden><svg class="icon"><use href="#i-plus"/></svg>点单品上的 ＋，放进右侧搭配画布。</p>
+    </div>
+    <aside class="styling-panel" aria-label="搭配工作台">
+      <div class="section-heading"><div><p class="eyebrow">THE STYLING TABLE</p><h2>今天，怎么搭？</h2></div><div class="mini-actions"><button id="undo" class="icon-button" aria-label="撤销画布操作" title="撤销" disabled><svg class="icon"><use href="#i-undo"/></svg></button><button id="new-outfit" class="icon-button" aria-label="新建搭配" title="新建搭配"><svg class="icon"><use href="#i-plus"/></svg></button></div></div>
+      <div class="board-top"><input id="outfit-name" aria-label="搭配名称" placeholder="给这套搭配起个名字（选填）" maxlength="100"><span id="layer-count">0 件</span></div>
+      <div id="outfit-board" class="outfit-board" tabindex="0" aria-label="搭配画布。选择单品后可拖动、调整大小，用方向键微调位置。"><div id="board-empty" class="board-empty"><svg class="icon"><use href="#i-spark"/></svg><p>把衣橱里的喜欢<br>放在一起看看</p><span>添加单品后，自由拖动与缩放</span></div><div id="board-layers" class="board-layers"></div><span class="board-signature" aria-hidden="true">A LOOK TO LOVE</span></div>
+      <div class="board-options"><div class="swatches" id="background-options" aria-label="画布背景"></div><button class="text-button" id="arrange-board"><svg class="icon"><use href="#i-grid"/></svg>整理排版</button></div>
+      <div id="layer-editor" class="layer-editor" hidden><div class="layer-editor-top"><span id="selected-name"></span><div class="mini-actions"><button id="flip-layer" class="icon-button" aria-label="水平翻转选中单品" title="水平翻转"><svg class="icon"><use href="#i-flip"/></svg></button><button id="raise-layer" class="icon-button" aria-label="把选中单品移到最前" title="移到最前"><svg class="icon"><use href="#i-layers"/></svg></button><button id="remove-layer" class="icon-button danger-text" aria-label="从搭配移除选中单品" title="从搭配移除"><svg class="icon"><use href="#i-close"/></svg></button></div></div><label class="range-label">大小<input id="layer-size" type="range" min="35" max="760" step="1"><output id="size-output"></output></label><label class="range-label">角度<input id="layer-rotation" type="range" min="-180" max="180" step="1"><output id="rotation-output"></output></label></div>
+      <div class="board-actions"><button class="button secondary" id="export-look" disabled><svg class="icon"><use href="#i-download"/></svg>导出图片</button><button class="button primary" id="save-outfit" disabled><svg class="icon"><use href="#i-check"/></svg><span id="save-outfit-label">保存搭配</span></button></div>
+      <p class="board-help">这是自由搭配拼图，可保存你的配色与穿衣灵感。</p>
+    </aside>
+  </section>
+  <section id="outfits-view" class="outfits-view" hidden><div class="section-heading"><div><p class="eyebrow">LOOKS TO KEEP</p><h2>我的搭配手册 <span id="outfit-count" class="count">0</span></h2></div><button class="button secondary" id="outfits-new"><svg class="icon"><use href="#i-plus"/></svg>搭一套新的</button></div><p class="outfits-intro">留住那些「这样穿很好看」的瞬间。</p><div id="outfit-grid" class="outfit-grid"></div><div id="outfits-empty" class="empty-state"><svg class="icon"><use href="#i-layers"/></svg><h3>第一套搭配，等你来搭</h3><p>选几件喜欢的单品，在画布里自由组合，再保存到这里。</p><button class="button primary" id="go-style">去搭配衣服 <svg class="icon"><use href="#i-arrow"/></svg></button></div></section>
+  <footer class="site-footer"><span><span class="status-dot"></span><span id="storage-status">正在打开本机衣橱…</span></span><button class="text-button" id="open-help">使用小贴士 <svg class="icon"><use href="#i-info"/></svg></button><span class="footer-tagline">Less scrolling. More wearing.</span></footer>
+</main>
+<input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden>
+<input id="restore-input" type="file" accept="application/json,.json" hidden>
+<dialog id="upload-dialog" class="modal upload-modal"><div class="modal-heading"><div><p class="eyebrow">MAKE ROOM FOR YOUR FAVORITES</p><h2>放进衣橱</h2></div><button class="icon-button" data-close="upload-dialog" aria-label="关闭上传窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="muted">名字可以留空，分类以后也能改。先把喜欢的衣服收进来。</p><div class="batch-category"><label for="batch-category">这一批先放到</label><select id="batch-category"><option value="auto">按文件名建议分类</option></select><span class="subtle">可逐件修改</span></div><p id="upload-progress" class="upload-progress" role="status"></p><div id="upload-errors" class="notice error-notice" hidden></div><div id="upload-list" class="upload-list"></div><div class="modal-footer"><button id="pick-more" class="button secondary"><svg class="icon"><use href="#i-plus"/></svg>继续选图</button><button id="confirm-upload" class="button primary" disabled>保存到衣橱</button></div></dialog>
+<dialog id="edit-dialog" class="modal edit-modal"><div class="modal-heading"><div><p class="eyebrow">A CLOSER LOOK</p><h2>这件喜欢</h2></div><button class="icon-button" data-close="edit-dialog" aria-label="关闭单品窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="edit-content"><div><div class="edit-preview"><img id="edit-image" alt="单品预览"></div><div class="image-tools"><button class="button small secondary" id="clean-background">去除浅色背景</button><button class="text-button" id="restore-original">恢复原图</button></div><p class="fine-print">浅色背景处理适合白底单品图，可能影响白色衣服。保存前请检查；原图会保留。</p></div><form id="edit-form"><label>名字 <span class="subtle">选填</span><input id="edit-name" maxlength="100" placeholder="留空时使用默认名称"></label><label>分类<select id="edit-category"></select></label><label>颜色 <span class="subtle">选填</span><input id="edit-color" maxlength="30" placeholder="例如：奶油白、酒红"></label><label>一点记录 <span class="subtle">选填</span><textarea id="edit-notes" maxlength="1500" rows="4" placeholder="品牌、尺码，或喜欢它的理由…"></textarea></label><button type="submit" class="button primary full-width">保存修改</button></form></div><div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div></dialog>
+<dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>照片和搭配保存在当前设备的浏览器里。</strong><p>换浏览器、清理网站数据或使用无痕模式，都可能让记录无法保留。建议定期导出备份。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、单品信息和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。网页公开访问时，浏览器里的衣服也不会自动上传到 GitHub。</p></dialog>
+<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p></dialog>
+<noscript><p class="noscript">请在浏览器中启用 JavaScript，才能上传、保存和搭配衣服。</p></noscript>
+</body>
+</html>
