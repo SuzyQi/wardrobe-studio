@@ -28,7 +28,7 @@
   }
   function toast(message, error = false) {
     clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
-    $('toast').style.background = error ? '#5b3b3b' : ''; toastTimer = setTimeout(() => { $('toast').hidden = true; }, error ? 6500 : 3200);
+    $('toast').style.background = error ? '#77625f' : ''; toastTimer = setTimeout(() => { $('toast').hidden = true; }, error ? 6500 : 3200);
   }
   function report(error) { console.error(error); toast(error?.message || '这次操作没有完成，请重试。', true); }
   function listen(target, event, handler) {
@@ -451,7 +451,7 @@
   categorySelect($('batch-category'), true); categorySelect($('edit-category'));
   C.BACKGROUNDS.forEach((color, i) => {
     const b = node('button', 'swatch'); b.type = 'button'; b.style.backgroundColor = color; b.dataset.color = color;
-    b.setAttribute('aria-label', ['奶油黄背景', '粉蓝背景', '深酒红背景'][i]); b.setAttribute('aria-pressed', String(i === 0));
+    b.setAttribute('aria-label', ['奶油白背景', '浅雾蓝背景', '淡豆沙背景'][i]); b.setAttribute('aria-pressed', String(i === 0));
     b.onclick = () => { if (state.background !== color) { pushHistory(); state.background = color; renderBoard(); saveDraft(); } }; $('background-options').append(b);
   });
   listen('file-input', 'change', e => { const files = Array.from(e.target.files || []); e.target.value = ''; return uploadFiles(files); });

@@ -13,12 +13,12 @@
     { id: 'unsorted', label: '待整理' }
   ];
   const CAT_IDS = new Set(CATEGORIES.slice(1).map(c => c.id));
-  const BACKGROUNDS = ['#fff1b5', '#c1dbe8', '#43302e'];
-  const LEGACY_BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6'];
+  const BACKGROUNDS = ['#f8f7f3', '#edf1f2', '#f3edeb'];
+  const LEGACY_BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6', '#fff1b5', '#c1dbe8', '#43302e'];
   function normalizeBackground(color) {
     return [...BACKGROUNDS, ...LEGACY_BACKGROUNDS].includes(color) ? color : BACKGROUNDS[0];
   }
-  function boardInk(color) { return color === '#43302e' ? '#fff1b5' : '#43302e'; }
+  function boardInk(color) { return color === '#43302e' ? '#fff1b5' : '#615654'; }
   const ID_RE = /^[a-zA-Z0-9_-]{1,100}$/;
   const SAFE_IMAGE = /^data:image\/(png|jpeg|webp|avif);base64,[A-Za-z0-9+/]+={0,2}$/;
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
