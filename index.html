@@ -7,14 +7,14 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261016-cloud" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261016-cloud">
-  <script src="./core.js?v=20261016-cloud" defer></script>
-  <script src="./storage.js?v=20261016-cloud" defer></script>
-  <script src="./images.js?v=20261016-cloud" defer></script>
-  <script src="./demo.js?v=20261016-cloud" defer></script>
-  <script src="./cloud.js?v=20261016-cloud" defer></script>
-  <script src="./app.js?v=20261016-cloud" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261016-device" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261016-device">
+  <script src="./core.js?v=20261016-device" defer></script>
+  <script src="./storage.js?v=20261016-device" defer></script>
+  <script src="./images.js?v=20261016-device" defer></script>
+  <script src="./demo.js?v=20261016-device" defer></script>
+  <script src="./cloud.js?v=20261016-device" defer></script>
+  <script src="./app.js?v=20261016-device" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -116,8 +116,8 @@
     <div class="record-fields"><label for="cloud-owner">GitHub 用户名<input id="cloud-owner" value="SuzyQi" required autocomplete="off" spellcheck="false"></label><label for="cloud-repo">私有数据仓库<input id="cloud-repo" value="wardrobe-studio-data" required autocomplete="off" spellcheck="false"></label></div>
     <label for="cloud-token">仓库访问授权<input id="cloud-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴仅此仓库的 Fine-grained token" required></label>
     <p class="fine-print">在 GitHub 创建 Fine-grained token，Repository access 仅选 wardrobe-studio-data，Contents 设为 Read and write。<a href="https://github.com/settings/personal-access-tokens/new?name=Wardrobe+Studio+Sync&amp;target_name=SuzyQi&amp;contents=write&amp;expires_in=90" target="_blank" rel="noopener noreferrer">打开 GitHub 授权设置 ↗</a></p>
-    <label class="cloud-check"><input id="cloud-remember" type="checkbox">在当前标签页会话中记住授权，刷新后可自动连接</label>
-    <p class="fine-print">默认只在本次打开期间使用授权，不写进公开代码、衣橱备份或本机衣橱数据库。勾选后仅暂存在此标签页的会话存储中。</p>
+    <label class="cloud-check"><input id="cloud-remember" type="checkbox">记住此设备，下次打开自动连接</label>
+    <p class="fine-print">仅在自己的手机或电脑上勾选。授权将保存在此浏览器，关闭页面后仍可使用；点击「断开连接」会清除。请使用普通浏览模式，授权到期或清除网站数据后需重新输入。授权不会写入衣橱备份或公开代码。</p>
     <button class="button primary full-width" type="submit">连接并合并衣橱</button>
   </form>
   <div class="cloud-controls"><label class="cloud-check"><input id="cloud-auto" type="checkbox" checked>保存后自动同步</label><div><button id="cloud-sync-now" class="button secondary" disabled>立即同步</button><button id="cloud-disconnect" class="text-button" hidden>断开连接</button></div></div>

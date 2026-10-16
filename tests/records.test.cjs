@@ -28,16 +28,18 @@ class Element {
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
 async function start(records, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m => [m[1], new Element()]));
-  const errors = [], downloads = [], writes = [], memory = { garments: records, outfits: options.outfits || [], meta: options.meta || [] }, session = options.session || new Map();
+  const errors = [], downloads = [], writes = [], timers = [], memory = { garments: records, outfits: options.outfits || [], meta: options.meta || [] }, session = options.session || new Map(), persistent = options.persistent || new Map();
   const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; },
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
     write: async operations => { for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
   const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob) };
   const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
-    sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) }, addEventListener() {} };
-  await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, console: { error: error => errors.push(error) }, setTimeout: () => 1, clearTimeout() {} });
-  return { elements, errors, downloads, writes, memory, session };
+    sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
+    localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener() {} };
+  await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, console: { error: error => errors.push(error) },
+    setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => { timers[id - 1] = null; } });
+  return { elements, errors, downloads, writes, memory, session, persistent, runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'garment-title').onclick(); }
@@ -111,7 +113,7 @@ test('the real connection flow syncs private data without storing credentials in
   const api = fixture(), record = { ...oldGarment('g_1'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) };
   const app = await start([record], { api }); await connect(app);
   assert.equal(api.manifest().garments.length, 1); assert.equal(app.elements['cloud-token'].value, '');
-  assert.equal(app.session.size, 0); assert.doesNotMatch(JSON.stringify(app.memory.meta), /unit-test-only/);
+  assert.equal(app.session.size, 0); assert.equal(app.persistent.size, 0); assert.doesNotMatch(JSON.stringify(app.memory.meta), /unit-test-only/);
   openRecord(app); app.elements['edit-price'].value = '75'; app.elements['edit-form'].fire('submit'); await flush();
   assert.equal(app.elements['cloud-button-label'].textContent, '待同步');
   app.elements['cloud-sync-now'].fire('click'); await until(() => api.manifest().garments[0].purchasePrice === 75); await flush();
@@ -130,10 +132,45 @@ test('a fresh browser loads cloud metadata and thumbnails while originals remain
   fresh.elements['export-backup'].fire('click'); await until(() => fresh.downloads.length > 0);
   assert.ok(api.rawGets.includes(originalSha)); assert.equal(fresh.errors.length, 0);
 });
-test('remembering authorization requires the explicit session checkbox and disconnect clears it', async () => {
+test('device opt-in survives a new browser session, reconnects automatically, and disconnect forgets it', async () => {
   const api = fixture(), app = await start([], { api }); app.elements['cloud-remember'].checked = true; await connect(app);
-  assert.equal(app.session.size, 1); assert.doesNotMatch(JSON.stringify(app.memory.meta), /unit-test-only/);
-  app.elements['cloud-disconnect'].fire('click'); assert.equal(app.session.size, 0); assert.equal(app.elements['cloud-sync-now'].disabled, true);
+  assert.equal(app.session.size, 0); assert.equal(app.persistent.size, 1); assert.doesNotMatch(JSON.stringify(app.memory.meta), /unit-test-only/);
+  const reopened = await start([], { api, persistent: app.persistent }); reopened.runStartup();
+  await until(() => reopened.elements['cloud-button-label'].textContent === '已同步' || reopened.errors.length);
+  assert.deepEqual(reopened.errors, []); assert.equal(reopened.elements['cloud-token'].value, '');
+  reopened.elements['open-cloud'].fire('click'); assert.equal(reopened.elements['cloud-remember'].checked, true);
+  reopened.elements['export-backup'].fire('click'); await until(() => reopened.downloads.length);
+  assert.doesNotMatch(await reopened.downloads[0].text(), /unit-test-only/);
+  reopened.elements['cloud-disconnect'].fire('click'); assert.equal(app.persistent.size, 0); assert.equal(reopened.session.size, 0);
+  assert.equal(reopened.elements['cloud-sync-now'].disabled, true);
+  const forgotten = await start([], { api, persistent: app.persistent }); forgotten.runStartup(); await flush();
+  assert.equal(forgotten.elements['cloud-button-label'].textContent, 'GitHub 同步');
+});
+test('a connected device can opt in or forget without entering the token again', async () => {
+  const api = fixture(), app = await start([], { api }); await connect(app);
+  app.elements['cloud-remember'].checked = true; app.elements['cloud-remember'].fire('change');
+  assert.equal(app.persistent.size, 1); assert.equal(app.elements['cloud-token'].value, '');
+  app.elements['cloud-remember'].checked = false; app.elements['cloud-remember'].fire('change');
+  assert.equal(app.persistent.size, 0); assert.equal(app.elements['cloud-sync-now'].disabled, false);
+  app.elements['cloud-sync-now'].fire('click'); await flush(); assert.deepEqual(app.errors, []);
+});
+test('blocked persistent storage reports failure while preserving the synced wardrobe', async () => {
+  const api = fixture(), app = await start([], { api, blockPersistence: true }); app.elements['cloud-remember'].checked = true; await connect(app);
+  assert.equal(app.persistent.size, 0); assert.equal(app.elements['cloud-button-label'].textContent, '已同步');
+  assert.match(app.elements.toast.textContent, /未能保存授权/); assert.doesNotMatch(JSON.stringify(app.memory.meta), /unit-test-only/);
+});
+test('legacy tab authorization reconnects without silently opting into device storage', async () => {
+  const api = fixture(), session = new Map([['wardrobe-github-session', JSON.stringify({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only' })]]);
+  const app = await start([], { api, session }); app.runStartup();
+  await until(() => app.elements['cloud-button-label'].textContent === '已同步' || app.errors.length);
+  assert.deepEqual(app.errors, []); assert.equal(app.session.size, 1); assert.equal(app.persistent.size, 0);
+  app.elements['open-cloud'].fire('click'); assert.equal(app.elements['cloud-remember'].checked, false);
+});
+test('malformed remembered credentials do not prevent opening the local wardrobe', async () => {
+  for (const value of ['{broken', 'null', '{"token":"unit-test-only"}']) {
+    const app = await start([], { persistent: new Map([['wardrobe-github-device', value]]) }); app.runStartup(); await flush();
+    assert.deepEqual(app.errors, []); assert.equal(app.elements['cloud-button-label'].textContent, 'GitHub 同步');
+  }
 });
 test('a missing cloud manifest preserves local records and the previous sync checkpoint', async () => {
   const api = fixture(), record = { ...oldGarment('g_1'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) };

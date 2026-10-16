@@ -13,7 +13,7 @@
   let draftChain = Promise.resolve(), sliderStart = null;
   const Cloud = window.WardrobeCloud, localWrite = DB.write.bind(DB);
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
-    auto: true, timer: null, message: '尚未连接 GitHub', conflict: null };
+    auto: true, timer: null, message: '尚未连接 GitHub', conflict: null, authorization: null };
   const assetLoads = new Map(); let activeAssetLoads = 0, cacheWriteChain = Promise.resolve(); const assetQueue = [];
   DB.write = async operations => {
     const changed = operations.some(op => op.store === 'garments' || op.store === 'outfits');
@@ -33,12 +33,26 @@
     $('cloud-last-sync').textContent = cloud.saved.lastSyncAt ? '上次同步：' + new Date(cloud.saved.lastSyncAt).toLocaleString('zh-CN') : '同步照片、单品档案和已保存的搭配。';
     if (state.ready) updateStorageStatus();
   }
-  function sessionAuthorization(value) {
-    try {
-      if (value === undefined) return JSON.parse(window.sessionStorage?.getItem('wardrobe-github-session') || 'null');
-      if (value) window.sessionStorage?.setItem('wardrobe-github-session', JSON.stringify(value));
-      else window.sessionStorage?.removeItem('wardrobe-github-session');
-    } catch { return null; }
+  const authorizationStores = [['device', 'localStorage', 'wardrobe-github-device'], ['session', 'sessionStorage', 'wardrobe-github-session']];
+  function storedAuthorization() {
+    for (const [mode, storage, key] of authorizationStores) {
+      try {
+        const config = JSON.parse(window[storage].getItem(key) || 'null');
+        if (config && ['owner', 'repo', 'token'].every(field => typeof config[field] === 'string' && config[field].trim())) return { config, mode };
+        window[storage].removeItem(key);
+      } catch { /* A browser may block one storage area while allowing the other. */ }
+    }
+    return null;
+  }
+  function saveAuthorization(config, mode = 'memory') {
+    let saved = true;
+    for (const [target, storage, key] of authorizationStores) {
+      try {
+        if (config && mode === target) window[storage].setItem(key, JSON.stringify({ owner: config.owner, repo: config.repo, token: config.token }));
+        else window[storage].removeItem(key);
+      } catch { saved = false; }
+    }
+    return saved;
   }
   function scheduleCloud() {
     clearTimeout(cloud.timer);
@@ -152,17 +166,21 @@
   }
   async function connectCloud(remembered) {
     if (!state.ready || busy) return;
-    const config = remembered || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
+    const config = remembered?.config || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
     $('cloud-token').value = '';
-    const remember = remembered || $('cloud-remember').checked, previousClient = cloud.client, previousSaved = cloud.saved;
+    const mode = remembered?.mode || ($('cloud-remember').checked ? 'device' : 'memory'), previousClient = cloud.client, previousSaved = cloud.saved;
     const candidate = Cloud.createClient(config);
     try {
       const same = (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase() === candidate.fullName;
       cloud.client = candidate; cloud.saved = { ...cloud.saved, config: { owner: config.owner, repo: config.repo }, base: same ? cloud.saved.base : null };
       await syncCloud();
       if (previousClient && previousClient !== candidate) previousClient.disconnect();
-      sessionAuthorization(remember ? config : null);
-      if (!cloud.conflict) { $('cloud-dialog').close(); toast('GitHub 已连接，衣橱已同步。'); }
+      cloud.authorization = config;
+      const saved = saveAuthorization(config, mode);
+      if (!cloud.conflict) {
+        $('cloud-dialog').close();
+        toast(saved ? (mode === 'device' ? '已同步并记住此设备，下次打开自动连接。' : 'GitHub 已连接，衣橱已同步。') : '衣橱已同步，但浏览器未能保存授权；下次打开仍需重新输入。', !saved);
+      }
     } catch (error) {
       candidate.disconnect(); cloud.client = previousClient; cloud.saved = previousSaved; cloud.message = '连接或同步未完成，本机记录已保留'; renderCloudStatus(); throw error;
     }
@@ -673,15 +691,22 @@
   listen('open-backup', 'click', () => { if (state.ready) $('backup-dialog').showModal(); });
   listen('open-cloud', 'click', () => {
     $('cloud-owner').value = cloud.saved.config.owner; $('cloud-repo').value = cloud.saved.config.repo;
-    $('cloud-auto').checked = cloud.auto; $('cloud-remember').checked = !!sessionAuthorization();
+    $('cloud-auto').checked = cloud.auto; $('cloud-remember').checked = storedAuthorization()?.mode === 'device';
     renderCloudStatus(); $('cloud-dialog').showModal();
   });
   listen('cloud-form', 'submit', e => { e.preventDefault(); return connectCloud(); });
+  listen('cloud-remember', 'change', e => {
+    if (!cloud.authorization) return;
+    const saved = saveAuthorization(cloud.authorization, e.target.checked ? 'device' : 'memory');
+    if (!saved) { e.target.checked = storedAuthorization()?.mode === 'device'; return toast('浏览器未能更新授权保存设置，请使用普通浏览模式后重试。', true); }
+    toast(e.target.checked ? '已记住此设备，下次打开自动连接。' : '已移除此设备保存的授权，本次连接仍可使用。');
+  });
   listen('cloud-sync-now', 'click', () => syncCloud());
   listen('cloud-auto', 'change', async e => { cloud.auto = e.target.checked; cloud.saved = { ...cloud.saved, auto: cloud.auto }; await localWrite([{ store: 'meta', value: cloud.saved }]); scheduleCloud(); });
   listen('cloud-disconnect', 'click', () => {
-    cloud.client?.disconnect(); cloud.client = null; clearTimeout(cloud.timer); sessionAuthorization(null); $('cloud-token').value = '';
+    cloud.client?.disconnect(); cloud.client = null; cloud.authorization = null; clearTimeout(cloud.timer); const cleared = saveAuthorization(null); $('cloud-token').value = ''; $('cloud-remember').checked = false;
     cloud.message = '已断开连接，本机缓存与云端记录均保留'; renderCloudStatus();
+    if (!cleared) toast('连接已断开，但浏览器未能清除保存的授权；请在浏览器设置中清除此网站数据。', true);
   });
   listen('cloud-resolve', 'click', async () => {
     const choices = {}; for (const row of $('cloud-conflict-list').children) { const select = row.querySelector('select'); if (!select.value) return toast('请为每条冲突选择保留版本。', true); choices[select.dataset.key] = select.value; }
@@ -719,8 +744,8 @@
     const draft = results[2].find(v => v.id === 'draft');
     if (draft && Array.isArray(draft.layers)) applySnapshot(draft); else renderBoard();
     renderCloset(); renderOutfits(); renderCloudStatus();
-    const remembered = sessionAuthorization();
-    if (remembered?.token && Cloud) setTimeout(() => connectCloud(remembered).catch(report), 0);
+    const remembered = storedAuthorization();
+    if (remembered && Cloud) setTimeout(() => connectCloud(remembered).catch(report), 0);
   } catch (error) {
     $('storage-status').textContent = '无法打开本机衣橱'; renderCloset(); renderBoard(); report(error);
     for (const b of document.querySelectorAll('[data-upload]')) b.disabled = true;
