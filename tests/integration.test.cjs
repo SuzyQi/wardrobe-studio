@@ -14,12 +14,14 @@ test('every app element reference exists, IDs are unique, and static entrypoints
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)) assert.ok(fs.existsSync(path.join(root, match[1].split('?')[0])), 'missing asset: ' + match[1]);
   assert.match(html, /<dialog id="busy-overlay"/); assert.match(html, /<script src="\.\/demo.js(?:\?[^\"]+)?" defer>/);
 });
-test('app has no external service dependencies or API credentials', () => {
-  for (const file of ['index.html', 'app.js', 'images.js', 'storage.js', 'demo.js', 'styles.css']) {
+test('optional cloud access is limited to GitHub and source contains no embedded credentials', () => {
+  for (const file of ['index.html', 'app.js', 'cloud.js', 'images.js', 'storage.js', 'demo.js', 'styles.css']) {
     const text = fs.readFileSync(path.join(root, file), 'utf8');
-    assert.doesNotMatch(text, /https?:\/\/(?!www\.w3\.org)/, file + ' should work without external endpoints');
-    assert.doesNotMatch(text, /api[_-]?key|sk-[a-zA-Z0-9]{20}/i);
+    for (const url of text.match(/https?:\/\/[^\s"'<>;]+/g) || []) assert.ok(['www.w3.org', 'api.github.com', 'github.com'].includes(new URL(url).hostname), file + ' contains an unexpected external origin');
+    assert.equal(/github_pat_[a-zA-Z0-9_]{20,}|gh[pousr]_[a-zA-Z0-9]{20,}|sk-[a-zA-Z0-9]{20}/.test(text), false, file + ' contains a credential-shaped literal');
   }
+  assert.match(html, /connect-src 'self' https:\/\/api.github.com/);
+  assert.match(html, /script-src 'self'/);
 });
 test('all eight optional demos are defined and correctly classified', () => {
   const context = {}; vm.runInNewContext(fs.readFileSync(path.join(root, 'demo.js'), 'utf8'), context);

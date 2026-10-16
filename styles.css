@@ -54,3 +54,24 @@
 .garment-original{font-size:9px;color:var(--muted)}
 .record-note{font-size:10px;color:var(--muted);line-height:1.8}
 @media(max-width:660px){.value-overview{padding:14px 14px 11px}.value-metrics{gap:12px}.value-metrics>div+div{padding-left:12px}.value-total{font-size:23px}.original-total{font-size:20px}.brand-filter-row select{min-height:38px;font-size:12px}}
+
+/* Private GitHub synchronization. */
+.cloud-button{font-size:11px;padding:9px 10px}
+.cloud-modal{max-width:620px}
+.cloud-status-box{background:var(--accent-soft);border-radius:10px;padding:15px 17px;margin:15px 0}
+.cloud-status-box p{font-size:13px;color:var(--accent)}
+.cloud-status-box span,.cloud-status-box small{display:block;color:var(--muted);font-size:10px;margin-top:5px;overflow-wrap:anywhere}
+.cloud-form{display:flex;flex-direction:column;gap:13px;margin-top:20px}
+.cloud-form label{display:flex;flex-direction:column;gap:6px;font-size:12px;min-width:0}
+.cloud-form input:not([type=checkbox]),.cloud-conflict-row select{width:100%;min-width:0;background:#edf1f294;border:1px solid var(--line);border-radius:7px;padding:10px;font-size:12px}
+.cloud-form .fine-print{margin-top:0}
+.cloud-form a{text-decoration:underline;text-underline-offset:3px;color:var(--accent)}
+.cloud-form label.cloud-check,.cloud-check{display:flex;flex-direction:row;gap:8px;align-items:flex-start;font-size:11px;line-height:1.8;color:var(--muted)}
+.cloud-check input{width:15px;height:15px;flex-shrink:0;margin:3px 0 0;accent-color:var(--accent)}
+.cloud-controls{display:flex;justify-content:space-between;align-items:center;gap:15px;flex-wrap:wrap;border-top:1px solid var(--line);margin-top:20px;padding-top:18px}
+.cloud-controls>div{display:flex;gap:15px;align-items:center}
+.cloud-conflict-list{display:flex;flex-direction:column;gap:15px;margin-top:20px}
+.cloud-conflict-row{display:flex;flex-direction:column;gap:6px;border:1px solid var(--line);border-radius:9px;padding:12px}
+.cloud-conflict-row strong{font-size:13px;font-weight:500}
+.cloud-image-pending{color:var(--muted);font-size:10px}
+@media(max-width:660px){.cloud-button{font-size:10px;padding-left:8px;padding-right:8px}.cloud-form input:not([type=checkbox]),.cloud-conflict-row select{font-size:16px}.cloud-controls .button{font-size:11px;min-height:37px}}

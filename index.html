@@ -4,15 +4,17 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#f8f7f3">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261016-value" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261016-value">
-  <script src="./core.js?v=20261016-value" defer></script>
-  <script src="./storage.js?v=20261016-value" defer></script>
-  <script src="./images.js?v=20261016-value" defer></script>
-  <script src="./demo.js?v=20261016-value" defer></script>
-  <script src="./app.js?v=20261016-value" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261016-cloud" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261016-cloud">
+  <script src="./core.js?v=20261016-cloud" defer></script>
+  <script src="./storage.js?v=20261016-cloud" defer></script>
+  <script src="./images.js?v=20261016-cloud" defer></script>
+  <script src="./demo.js?v=20261016-cloud" defer></script>
+  <script src="./cloud.js?v=20261016-cloud" defer></script>
+  <script src="./app.js?v=20261016-cloud" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -32,13 +34,14 @@
   <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 5-10 5L2 8zm-9 10 9 5 9-5M3 18l9 5 9-5"/></symbol>
   <symbol id="i-flip" viewBox="0 0 24 24"><path d="M12 2v20M8 5 2 19h6zm8 0 6 14h-6z"/></symbol>
   <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5z"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18H6a4 4 0 1 1 .8-7.9 6 6 0 0 1 11.7-.6A4.3 4.3 0 0 1 18 18h-1M12 21V11m-3 3 3-3 3 3"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v.2"/></symbol>
 </defs></svg>
 <a class="skip-link" href="#workspace">跳到我的衣橱</a>
 <header class="site-header">
   <a class="brand" href="./" aria-label="衣橱间首页"><span class="brand-mark"><svg class="icon"><use href="#i-hanger"/></svg></span><span>衣橱间<small>WARDROBE STUDIO</small></span></a>
   <nav class="main-nav" aria-label="页面"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button></nav>
-  <div class="header-actions"><button class="button ghost backup-button" id="open-backup"><svg class="icon"><use href="#i-download"/></svg><span>备份</span></button><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg><span>添加衣服</span></button></div>
+  <div class="header-actions"><button class="button ghost cloud-button" id="open-cloud" aria-label="GitHub 同步设置"><svg class="icon"><use href="#i-cloud"/></svg><span id="cloud-button-label">GitHub 同步</span></button><button class="button ghost backup-button" id="open-backup"><svg class="icon"><use href="#i-download"/></svg><span>备份</span></button><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg><span>添加衣服</span></button></div>
 </header>
 <main>
   <section id="workspace" class="workspace" aria-label="我的衣橱与搭配画布">
@@ -103,8 +106,24 @@
   <div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div>
 </dialog>
 <datalist id="brand-suggestions"></datalist>
-<dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>照片和搭配保存在当前设备的浏览器里。</strong><p>换浏览器、清理网站数据或使用无痕模式，都可能让记录无法保留。建议定期导出备份。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、完整单品档案和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。网页公开访问时，浏览器里的衣服也不会自动上传到 GitHub。</p></dialog>
-<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、原价、实际购入价、全新或二手、购入方式、购买渠道、日期和购入状态；留空也能保存。完整档案会随备份一起保留。</p></li><li><strong>查看衣橱价值与品牌</strong><p>衣橱顶部汇总已购入单品的实际花费与原价，并显示未填价格的数量。不同币种分开统计，想买和示例衣服不计入。用品牌下拉框筛选，或直接搜索品牌名。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>本机保存与 GitHub 同步可一起使用。</strong><p>连接 GitHub 后，照片、单品档案和已保存搭配可同步至私有仓库。完整备份也能用于换设备和恢复本机记录。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、完整单品档案和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。使用 GitHub 同步时，请确认状态显示“已同步”；离线或尚未连接时，新修改先保存在本机。</p></dialog>
+<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、原价、实际购入价、全新或二手、购入方式、购买渠道、日期和购入状态；留空也能保存。完整档案会随备份一起保留；连接 GitHub 后也会一起同步。</p></li><li><strong>查看衣橱价值与品牌</strong><p>衣橱顶部汇总已购入单品的实际花费与原价，并显示未填价格的数量。不同币种分开统计，想买和示例衣服不计入。用品牌下拉框筛选，或直接搜索品牌名。</p></li><li><strong>连接私有 GitHub 衣橱</strong><p>点右上角 GitHub 同步，连接独立的私有数据仓库。开启自动同步后，新照片、单品修改和已保存的搭配会同步；未保存的画布草稿保存在本机。换设备后连接同一仓库即可加载。遇到冲突时选择保留的版本。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="cloud-dialog" class="modal cloud-modal" aria-labelledby="cloud-title">
+  <div class="modal-heading"><div><p class="eyebrow">YOUR PRIVATE WARDROBE</p><h2 id="cloud-title">GitHub 同步</h2></div><button class="icon-button" data-close="cloud-dialog" aria-label="关闭 GitHub 同步"><svg class="icon"><use href="#i-close"/></svg></button></div>
+  <div class="cloud-status-box"><p id="cloud-status" role="status">尚未连接 GitHub</p><span id="cloud-repository">SuzyQi/wardrobe-studio-data</span><small id="cloud-last-sync">同步照片、单品档案和已保存的搭配。</small></div>
+  <p class="muted">连接私有仓库后，可把当前衣橱合并到 GitHub。开启自动同步后，新增照片和已保存的修改会一起同步，删除也会同步。画布草稿仍在本机。</p>
+  <form id="cloud-form" class="cloud-form">
+    <div class="record-fields"><label for="cloud-owner">GitHub 用户名<input id="cloud-owner" value="SuzyQi" required autocomplete="off" spellcheck="false"></label><label for="cloud-repo">私有数据仓库<input id="cloud-repo" value="wardrobe-studio-data" required autocomplete="off" spellcheck="false"></label></div>
+    <label for="cloud-token">仓库访问授权<input id="cloud-token" type="password" autocomplete="off" spellcheck="false" placeholder="粘贴仅此仓库的 Fine-grained token" required></label>
+    <p class="fine-print">在 GitHub 创建 Fine-grained token，Repository access 仅选 wardrobe-studio-data，Contents 设为 Read and write。<a href="https://github.com/settings/personal-access-tokens/new?name=Wardrobe+Studio+Sync&amp;target_name=SuzyQi&amp;contents=write&amp;expires_in=90" target="_blank" rel="noopener noreferrer">打开 GitHub 授权设置 ↗</a></p>
+    <label class="cloud-check"><input id="cloud-remember" type="checkbox">在当前标签页会话中记住授权，刷新后可自动连接</label>
+    <p class="fine-print">默认只在本次打开期间使用授权，不写进公开代码、衣橱备份或本机衣橱数据库。勾选后仅暂存在此标签页的会话存储中。</p>
+    <button class="button primary full-width" type="submit">连接并合并衣橱</button>
+  </form>
+  <div class="cloud-controls"><label class="cloud-check"><input id="cloud-auto" type="checkbox" checked>保存后自动同步</label><div><button id="cloud-sync-now" class="button secondary" disabled>立即同步</button><button id="cloud-disconnect" class="text-button" hidden>断开连接</button></div></div>
+  <p class="fine-print">仅接受私有仓库。GitHub 保留提交历史，删除单品会从当前衣橱移除，历史版本可能仍保留文件。完整备份可另存一份。</p>
+</dialog>
+<dialog id="cloud-conflict-dialog" class="modal cloud-modal" aria-labelledby="cloud-conflict-title"><div class="modal-heading"><h2 id="cloud-conflict-title">选择要保留的版本</h2></div><p class="muted">同一条记录在不同设备上都有修改。选择后再提交；暂停时，双方记录会保持当前状态。</p><div id="cloud-conflict-list" class="cloud-conflict-list"></div><div class="modal-footer"><button id="cloud-conflict-cancel" class="button secondary">暂停同步</button><button id="cloud-resolve" class="button primary">应用选择并同步</button></div></dialog>
 <dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p></dialog>

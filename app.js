@@ -11,6 +11,162 @@
     view: 'closet', history: [], future: [], ready: false };
   let staged = [], editing = null, processing = false, busy = false, toastTimer, draftTimer;
   let draftChain = Promise.resolve(), sliderStart = null;
+  const Cloud = window.WardrobeCloud, localWrite = DB.write.bind(DB);
+  const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
+    auto: true, timer: null, message: '尚未连接 GitHub', conflict: null };
+  const assetLoads = new Map(); let activeAssetLoads = 0, cacheWriteChain = Promise.resolve(); const assetQueue = [];
+  DB.write = async operations => {
+    const changed = operations.some(op => op.store === 'garments' || op.store === 'outfits');
+    const checkpoint = { ...cloud.saved, dirty: true };
+    await localWrite(changed ? [...operations, { store: 'meta', value: checkpoint }] : operations);
+    if (changed) { cloud.saved = checkpoint; cloud.message = cloud.client ? '本机已保存，等待同步' : '本机已保存，连接后同步'; renderCloudStatus(); scheduleCloud(); }
+  };
+  function updateStorageStatus() {
+    $('storage-status').textContent = cloud.client ? (cloud.saved.dirty ? '本机已保存 · 等待 GitHub 同步' : '已保存至私有 GitHub 仓库') : '本机缓存 · 可连接 GitHub 同步';
+  }
+  function renderCloudStatus() {
+    $('cloud-status').textContent = cloud.message;
+    $('cloud-repository').textContent = cloud.saved.config.owner + '/' + cloud.saved.config.repo;
+    $('cloud-sync-now').disabled = !cloud.client;
+    $('cloud-disconnect').hidden = !cloud.client;
+    $('cloud-button-label').textContent = cloud.client ? (cloud.saved.dirty ? '待同步' : '已同步') : 'GitHub 同步';
+    $('cloud-last-sync').textContent = cloud.saved.lastSyncAt ? '上次同步：' + new Date(cloud.saved.lastSyncAt).toLocaleString('zh-CN') : '同步照片、单品档案和已保存的搭配。';
+    if (state.ready) updateStorageStatus();
+  }
+  function sessionAuthorization(value) {
+    try {
+      if (value === undefined) return JSON.parse(window.sessionStorage?.getItem('wardrobe-github-session') || 'null');
+      if (value) window.sessionStorage?.setItem('wardrobe-github-session', JSON.stringify(value));
+      else window.sessionStorage?.removeItem('wardrobe-github-session');
+    } catch { return null; }
+  }
+  function scheduleCloud() {
+    clearTimeout(cloud.timer);
+    if (!cloud.client || !cloud.auto || !cloud.saved.dirty || cloud.conflict) return;
+    cloud.timer = setTimeout(() => {
+      if (busy || document.querySelector('dialog[open]')) return scheduleCloud();
+      syncCloud().catch(report);
+    }, 3000);
+  }
+  function queuedAsset(task) {
+    return new Promise((resolve, reject) => {
+      assetQueue.push({ task, resolve, reject }); runAssetQueue();
+    });
+  }
+  function runAssetQueue() {
+    while (activeAssetLoads < 3 && assetQueue.length) {
+      const { task, resolve, reject } = assetQueue.shift(); activeAssetLoads++;
+      Promise.resolve().then(task).then(resolve, reject).finally(() => { activeAssetLoads--; runAssetQueue(); });
+    }
+  }
+  async function ensureAsset(record, field) {
+    if (record[field]) return record[field];
+    if (!cloud.client || record.cloudOrigin !== cloud.client.fullName || !record.cloudAssets?.[field]) throw new Error('请先连接 GitHub，以加载这件衣服的图片或原图。');
+    const reference = record.cloudAssets[field], key = record.cloudOrigin + ':' + reference.sha;
+    if (!assetLoads.has(key)) {
+      const client = cloud.client;
+      assetLoads.set(key, queuedAsset(() => client.getAsset(reference, record.id)).finally(() => assetLoads.delete(key)));
+    }
+    const blob = await assetLoads.get(key); record[field] = blob;
+    const current = garment(record.id);
+    if (current?.cloudOrigin === record.cloudOrigin && current.cloudAssets?.[field]?.sha === reference.sha) {
+      current[field] = blob;
+      if (!cloud.applying) {
+        cacheWriteChain = cacheWriteChain.catch(() => {}).then(() => localWrite([{ store: 'garments', value: current }]));
+        try { await cacheWriteChain; } catch { $('storage-status').textContent = '图片已加载，本机缓存空间不足；云端仍保留图片'; }
+      }
+    }
+    if (editing?.id === record.id && editing.cloudAssets?.[field]?.sha === reference.sha) editing[field] = blob;
+    return blob;
+  }
+  const observedImages = new WeakMap();
+  const imageObserver = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+    for (const entry of entries) if (entry.isIntersecting) { const load = observedImages.get(entry.target); imageObserver.unobserve(entry.target); if (load) load(); }
+  }, { rootMargin: '240px' }) : null;
+  function showAsset(img, record, field) {
+    if (record[field]) { img.src = url(record[field]); return; }
+    img.classList.add('cloud-image-pending'); img.title = '连接 GitHub 后加载图片';
+    const load = () => ensureAsset(record, field).then(blob => { if (img.isConnected !== false) { img.src = url(blob); img.classList.remove('cloud-image-pending'); img.title = ''; } }).catch(() => { img.alt = '连接 GitHub 加载图片'; });
+    if (imageObserver && field === 'thumb') { observedImages.set(img, load); imageObserver.observe(img); } else load();
+  }
+  async function applyCloud(published, prepared, client) {
+    cloud.applying = true;
+    await cacheWriteChain.catch(() => {});
+    const nextGarments = Cloud.localRecords(published.manifest, state.garments, client.fullName, prepared);
+    const nextOutfits = published.manifest.outfits, ids = new Set(nextGarments.map(g => g.id)), outfitIds = new Set(nextOutfits.map(o => o.id));
+    const layers = state.layers.filter(l => ids.has(l.garmentId));
+    const checkpoint = { id: 'github-sync', config: { ...cloud.saved.config }, base: published.manifest, head: published.head,
+      lastSyncAt: new Date().toISOString(), dirty: false, auto: cloud.auto };
+    const operations = [
+      ...state.garments.filter(g => !ids.has(g.id)).map(g => ({ store: 'garments', type: 'delete', id: g.id })),
+      ...state.outfits.filter(o => !outfitIds.has(o.id)).map(o => ({ store: 'outfits', type: 'delete', id: o.id })),
+      ...nextGarments.map(value => ({ store: 'garments', value })), ...nextOutfits.map(value => ({ store: 'outfits', value })),
+      { store: 'meta', value: checkpoint }, { store: 'meta', value: draftRecord({ ...snap(), layers, activeId: outfitIds.has(state.activeId) ? state.activeId : null }) }
+    ];
+    try { await localWrite(operations); } finally { cloud.applying = false; }
+    state.garments = nextGarments; state.outfits = nextOutfits; state.layers = layers; state.selected = null;
+    if (!outfitIds.has(state.activeId)) state.activeId = null;
+    state.history = []; state.future = []; cloud.saved = checkpoint; cloud.conflict = null;
+    renderCloset(); renderBoard(); renderOutfits();
+  }
+  function showConflicts(conflicts) {
+    $('cloud-conflict-list').replaceChildren();
+    for (const conflict of conflicts) {
+      const row = node('label', 'cloud-conflict-row'); row.append(node('strong', '', conflict.name));
+      row.append(node('span', 'subtle', '本机：' + (conflict.local ? '已修改' : '已删除') + ' · GitHub：' + (conflict.remote ? '已修改' : '已删除')));
+      const select = node('select'); select.dataset.key = conflict.key; select.setAttribute('aria-label', conflict.name + '保留哪个版本');
+      for (const [value, label] of [['', '请选择保留的版本'], ['local', '保留本机版本'], ['remote', '保留 GitHub 版本']]) { const opt = node('option', '', label); opt.value = value; select.append(opt); }
+      row.append(select); $('cloud-conflict-list').append(row);
+    }
+    if ($('cloud-dialog').open) $('cloud-dialog').close(); $('cloud-conflict-dialog').showModal();
+  }
+  async function syncCloud(resolutionPackage) {
+    if (!cloud.client || busy || !state.ready) return;
+    clearTimeout(cloud.timer); let conflicts = null;
+    cloud.message = '正在同步至私有 GitHub 仓库…'; renderCloudStatus();
+    try {
+      await work('正在检查云端衣橱…', async () => {
+        await draftChain;
+        const client = cloud.client; await client.connect();
+        const remote = await client.readRemote();
+        if (!remote.exists && cloud.saved.base) throw new Error('云端衣橱文件缺失，本机记录已保留。请先在 GitHub 恢复 wardrobe.json，再重新同步。');
+        const prepared = await client.prepare(state.garments, state.outfits, message => { $('busy-message').textContent = message; });
+        let merged = Cloud.merge(cloud.saved.base, prepared, remote.manifest);
+        if (merged.conflicts.length && resolutionPackage) {
+          const choices = {};
+          for (const conflict of merged.conflicts) {
+            const old = resolutionPackage.conflicts.find(c => c.key === conflict.key);
+            if (old && JSON.stringify(old.local) === JSON.stringify(conflict.local) && JSON.stringify(old.remote) === JSON.stringify(conflict.remote)) choices[conflict.key] = resolutionPackage.choices[conflict.key];
+          }
+          merged = Cloud.merge(cloud.saved.base, prepared, remote.manifest, choices);
+        }
+        if (merged.conflicts.length) { conflicts = merged.conflicts; cloud.conflict = conflicts; cloud.message = '发现不同设备的修改，请选择保留版本'; return; }
+        $('busy-message').textContent = '正在保存云端版本…';
+        const published = await client.publish(merged.manifest, remote);
+        await applyCloud(published, prepared, client);
+        cloud.message = '已同步，照片和档案保存在私有仓库';
+      });
+    } catch (error) { cloud.message = '同步未完成，本机记录已保留'; renderCloudStatus(); throw error; }
+    renderCloudStatus();
+    if (conflicts) showConflicts(conflicts);
+  }
+  async function connectCloud(remembered) {
+    if (!state.ready || busy) return;
+    const config = remembered || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
+    $('cloud-token').value = '';
+    const remember = remembered || $('cloud-remember').checked, previousClient = cloud.client, previousSaved = cloud.saved;
+    const candidate = Cloud.createClient(config);
+    try {
+      const same = (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase() === candidate.fullName;
+      cloud.client = candidate; cloud.saved = { ...cloud.saved, config: { owner: config.owner, repo: config.repo }, base: same ? cloud.saved.base : null };
+      await syncCloud();
+      if (previousClient && previousClient !== candidate) previousClient.disconnect();
+      sessionAuthorization(remember ? config : null);
+      if (!cloud.conflict) { $('cloud-dialog').close(); toast('GitHub 已连接，衣橱已同步。'); }
+    } catch (error) {
+      candidate.disconnect(); cloud.client = previousClient; cloud.saved = previousSaved; cloud.message = '连接或同步未完成，本机记录已保留'; renderCloudStatus(); throw error;
+    }
+  }
   const urls = new Map();
   function url(blob) { if (!urls.has(blob)) urls.set(blob, URL.createObjectURL(blob)); return urls.get(blob); }
   function cleanupUrls() {
@@ -67,7 +223,7 @@
     clearTimeout(draftTimer); const value = draftRecord();
     $('storage-status').textContent = '正在保存画布…';
     draftChain = draftChain.catch(() => {}).then(() => DB.write([{ store: 'meta', value }])).then(() => {
-      $('storage-status').textContent = '照片与搭配保存在此浏览器';
+      updateStorageStatus();
     }).catch(error => { $('storage-status').textContent = '本机保存失败，请导出备份'; report(error); });
     return draftChain;
   }
@@ -136,7 +292,7 @@
       const visual = node('div', 'garment-visual');
       const imageButton = node('button', 'garment-image-button'); imageButton.type = 'button';
       imageButton.setAttribute('aria-label', '把' + g.name + '加入搭配'); imageButton.onclick = () => addLayer(g.id);
-      const img = node('img'); img.src = url(g.thumb); img.alt = g.name; img.loading = 'lazy'; img.draggable = false; imageButton.append(img);
+      const img = node('img'); img.alt = g.name; img.loading = 'lazy'; img.draggable = false; imageButton.append(img); showAsset(img, g, 'thumb');
       const favorite = action(g.favorite ? '取消收藏' : '收藏单品', 'heart', 'icon-button card-favorite'); favorite.setAttribute('aria-pressed', String(g.favorite));
       favorite.onclick = async () => {
         favorite.disabled = true;
@@ -186,7 +342,7 @@
       const g = garment(l.garmentId), el = node('div', 'board-layer' + (l.id === state.selected ? ' selected' : ''));
       el.dataset.layerId = l.id; el.tabIndex = 0; el.setAttribute('role', 'button');
       el.setAttribute('aria-label', g.name + '，拖动调整位置'); el.style.zIndex = index + 1;
-      const img = node('img'); img.src = url(g.image); img.alt = ''; img.draggable = false; el.append(img);
+      const img = node('img'); img.alt = ''; img.draggable = false; el.append(img); showAsset(img, g, 'image');
       const handle = node('span', 'resize-handle'); handle.setAttribute('aria-hidden', 'true'); handle.dataset.resize = 'true'; el.append(handle);
       layerStyle(el, l, g); $('board-layers').append(el);
     });
@@ -237,7 +393,7 @@
       preview.style.setProperty('--board-ink', C.boardInk(o.background));
       for (const l of o.layers) {
         const g = garment(l.garmentId); if (!g) continue;
-        const img = node('img'); img.src = url(g.thumb); img.alt = ''; img.draggable = false;
+        const img = node('img'); img.alt = ''; img.draggable = false; showAsset(img, g, 'thumb');
         img.style.left = l.x / 8 + '%'; img.style.top = l.y / 10 + '%'; img.style.width = l.w / 8 + '%';
         img.style.height = l.w / g.aspect / 10 + '%'; img.style.transform = 'rotate(' + l.rotation + 'deg)' + (l.flip ? ' scaleX(-1)' : ''); preview.append(img);
       }
@@ -281,7 +437,7 @@
       const c = I.canvas(1600, 2000), ctx = c.getContext('2d'); ctx.scale(2, 2); ctx.fillStyle = o.background; ctx.fillRect(0, 0, C.WIDTH, C.HEIGHT);
       for (const l of o.layers) {
         const g = garment(l.garmentId); if (!g) continue;
-        const img = await I.load(g.image), h = l.w / g.aspect;
+        const img = await I.load(await ensureAsset(g, 'image')), h = l.w / g.aspect;
         ctx.save(); ctx.translate(l.x + l.w / 2, l.y + h / 2); ctx.rotate(l.rotation * Math.PI / 180); if (l.flip) ctx.scale(-1, 1);
         ctx.drawImage(img, -l.w / 2, -h / 2, l.w, h); ctx.restore();
       }
@@ -339,7 +495,7 @@
   }
   function openEdit(id) {
     const g = garment(id); if (!g) return; editing = { ...g, ...C.garmentDetails(g) };
-    $('edit-image').src = url(editing.image); $('edit-name').value = g.name;
+    $('edit-image').removeAttribute('src'); showAsset($('edit-image'), editing, 'image'); $('edit-name').value = g.name;
     $('edit-category').value = g.category;
     for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
     $('edit-dialog').showModal();
@@ -378,7 +534,8 @@
       for (let i = 0; i < state.garments.length; i++) {
         $('busy-message').textContent = '正在备份衣服 ' + (i + 1) + ' / ' + state.garments.length + '…';
         const g = state.garments[i];
-        garments.push({ ...g, image: await I.dataUrl(g.image), original: await I.dataUrl(g.original), thumb: await I.dataUrl(g.thumb) });
+        const { cloudAssets, cloudOrigin, ...portable } = g;
+        garments.push({ ...portable, image: await I.dataUrl(await ensureAsset(g, 'image')), original: await I.dataUrl(await ensureAsset(g, 'original')), thumb: await I.dataUrl(await ensureAsset(g, 'thumb')) });
       }
       const data = { app: 'wardrobe-studio', version: 1, exportedAt: new Date().toISOString(), garments,
         outfits: state.outfits.map(o => ({ ...o, layers: o.layers.map(l => ({ ...l })) })) };
@@ -487,6 +644,7 @@
   $('upload-dialog').addEventListener('cancel', e => { if (processing) e.preventDefault(); });
   $('upload-dialog').addEventListener('close', () => { staged = []; $('upload-list').replaceChildren(); $('upload-errors').hidden = true; cleanupUrls(); });
   $('edit-dialog').addEventListener('close', () => { editing = null; cleanupUrls(); });
+  $('cloud-dialog').addEventListener('close', () => { $('cloud-token').value = ''; });
   for (const b of document.querySelectorAll('[data-upload]')) b.onclick = pickFiles;
   for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => setView(b.dataset.view);
   categorySelect($('batch-category'), true); categorySelect($('edit-category'));
@@ -513,6 +671,23 @@
   listen('outfit-name', 'input', () => { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 250); });
   listen('outfit-name', 'change', saveDraft); listen('save-outfit', 'click', saveOutfit); listen('export-look', 'click', () => exportLook());
   listen('open-backup', 'click', () => { if (state.ready) $('backup-dialog').showModal(); });
+  listen('open-cloud', 'click', () => {
+    $('cloud-owner').value = cloud.saved.config.owner; $('cloud-repo').value = cloud.saved.config.repo;
+    $('cloud-auto').checked = cloud.auto; $('cloud-remember').checked = !!sessionAuthorization();
+    renderCloudStatus(); $('cloud-dialog').showModal();
+  });
+  listen('cloud-form', 'submit', e => { e.preventDefault(); return connectCloud(); });
+  listen('cloud-sync-now', 'click', () => syncCloud());
+  listen('cloud-auto', 'change', async e => { cloud.auto = e.target.checked; cloud.saved = { ...cloud.saved, auto: cloud.auto }; await localWrite([{ store: 'meta', value: cloud.saved }]); scheduleCloud(); });
+  listen('cloud-disconnect', 'click', () => {
+    cloud.client?.disconnect(); cloud.client = null; clearTimeout(cloud.timer); sessionAuthorization(null); $('cloud-token').value = '';
+    cloud.message = '已断开连接，本机缓存与云端记录均保留'; renderCloudStatus();
+  });
+  listen('cloud-resolve', 'click', async () => {
+    const choices = {}; for (const row of $('cloud-conflict-list').children) { const select = row.querySelector('select'); if (!select.value) return toast('请为每条冲突选择保留版本。', true); choices[select.dataset.key] = select.value; }
+    const conflicts = cloud.conflict; $('cloud-conflict-dialog').close(); await syncCloud({ choices, conflicts });
+  });
+  listen('cloud-conflict-cancel', 'click', () => { $('cloud-conflict-dialog').close(); cloud.message = '同步已暂停，请处理不同设备的修改'; renderCloudStatus(); });
   listen('open-help', 'click', () => $('help-dialog').showModal());
   listen('export-backup', 'click', backup); listen('import-backup', 'click', () => $('restore-input').click());
   listen('restore-input', 'change', e => { const file = e.target.files?.[0]; e.target.value = ''; return restore(file); });
@@ -523,13 +698,13 @@
   listen('edit-form', 'submit', saveEdit); listen('delete-garment', 'click', deleteGarment);
   listen('clean-background', 'click', async () => {
     if (!editing) return;
-    await work('正在处理浅色背景，请检查衣服边缘…', async () => { const image = await I.removeLightBackground(editing); editing = { ...editing, ...image }; $('edit-image').src = url(editing.image); toast('背景处理完成。检查后保存，也可以恢复原图。'); });
+    await work('正在处理浅色背景，请检查衣服边缘…', async () => { await ensureAsset(editing, 'image'); await ensureAsset(editing, 'original'); const image = await I.removeLightBackground(editing); editing = { ...editing, ...image }; $('edit-image').src = url(editing.image); toast('背景处理完成。检查后保存，也可以恢复原图。'); });
   });
   listen('restore-original', 'click', async () => {
     if (!editing) return;
-    await work('正在恢复原图…', async () => { editing = { ...editing, ...await I.prepare(editing.original) }; $('edit-image').src = url(editing.image); toast('已恢复原图预览，保存后生效。'); });
+    await work('正在恢复原图…', async () => { editing = { ...editing, ...await I.prepare(await ensureAsset(editing, 'original')) }; $('edit-image').src = url(editing.image); toast('已恢复原图预览，保存后生效。'); });
   });
-  listen('download-original', 'click', () => { if (editing) { const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' }[editing.original.type] || 'png'; I.download(editing.original, safeFilename(editing.name) + '-original.' + ext); } });
+  listen('download-original', 'click', async () => { if (editing) { const original = await ensureAsset(editing, 'original'), ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' }[original.type] || 'png'; I.download(original, safeFilename(editing.name) + '-original.' + ext); } });
   listen('load-demo', 'click', addDemo); listen('help-demo', 'click', addDemo);
   listen('remove-demo', 'click', async () => {
     if (!await confirmAction('移除所有示例衣服？', '示例衣服也会从搭配中移除，你自己上传的衣服会保留。', '移除示例')) return;
@@ -539,9 +714,13 @@
   try {
     await DB.open(); const results = await Promise.all([DB.read('garments'), DB.read('outfits'), DB.read('meta')]);
     state.garments = results[0].map(g => ({ ...g, ...C.garmentDetails(g) })); state.outfits = results[1]; state.ready = true;
+    const checkpoint = results[2].find(v => v.id === 'github-sync');
+    if (checkpoint?.config?.owner && checkpoint.config.repo) { cloud.saved = checkpoint; cloud.auto = checkpoint.auto !== false; }
     const draft = results[2].find(v => v.id === 'draft');
     if (draft && Array.isArray(draft.layers)) applySnapshot(draft); else renderBoard();
-    renderCloset(); renderOutfits(); $('storage-status').textContent = '照片与搭配保存在此浏览器';
+    renderCloset(); renderOutfits(); renderCloudStatus();
+    const remembered = sessionAuthorization();
+    if (remembered?.token && Cloud) setTimeout(() => connectCloud(remembered).catch(report), 0);
   } catch (error) {
     $('storage-status').textContent = '无法打开本机衣橱'; renderCloset(); renderBoard(); report(error);
     for (const b of document.querySelectorAll('[data-upload]')) b.disabled = true;
