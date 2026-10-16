@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f8f7f3">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261016-compact" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261016-compact">
-  <script src="./core.js?v=20261016-compact" defer></script>
-  <script src="./storage.js?v=20261016-compact" defer></script>
-  <script src="./images.js?v=20261016-compact" defer></script>
-  <script src="./demo.js?v=20261016-compact" defer></script>
-  <script src="./app.js?v=20261016-compact" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261016-records" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261016-records">
+  <script src="./core.js?v=20261016-records" defer></script>
+  <script src="./storage.js?v=20261016-records" defer></script>
+  <script src="./images.js?v=20261016-records" defer></script>
+  <script src="./demo.js?v=20261016-records" defer></script>
+  <script src="./app.js?v=20261016-records" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -44,13 +44,13 @@
   <section id="workspace" class="workspace" aria-label="我的衣橱与搭配画布">
     <div class="closet-panel">
       <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>我的衣橱 <span class="count" id="garment-count">0</span></h2></div><button id="favorite-filter" class="icon-button" aria-label="只看收藏" aria-pressed="false" title="只看收藏"><svg class="icon"><use href="#i-heart"/></svg></button></div>
-      <div class="closet-controls"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="找一件衣服、一个颜色…" aria-label="搜索衣服"></label><select id="sort" aria-label="单品排序"><option value="newest">最近添加</option><option value="name">名称顺序</option><option value="category">按分类</option></select></div>
+      <div class="closet-controls"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索名称、品牌、颜色、尺码…" aria-label="搜索衣服"></label><select id="sort" aria-label="单品排序"><option value="newest">最近添加</option><option value="name">名称顺序</option><option value="category">按分类</option></select></div>
       <div id="category-tabs" class="category-tabs" aria-label="衣服分类"></div>
       <p id="filter-summary" class="filter-summary" hidden></p>
       <div id="garment-grid" class="garment-grid" aria-live="polite"></div>
       <div id="closet-empty" class="empty-state" hidden><div class="empty-closet" aria-hidden="true"><div class="rail"><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg></div></div><h3>从一件喜欢的衣服开始</h3><p>一次选多张照片，名字以后再想。<br>PNG、JPG、WebP 都可以放进来。</p><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg>上传我的衣服</button><button class="text-button" id="load-demo">先用 8 件示例试搭 <span aria-hidden="true">↗</span></button></div>
       <div id="no-results" class="empty-state small-empty" hidden><svg class="icon"><use href="#i-search"/></svg><h3>暂时没有找到这件衣服</h3><p>试试别的关键词，或清除筛选。</p><button class="button secondary" id="reset-filters">显示全部衣服</button></div>
-      <p class="closet-tip" id="closet-tip" hidden><svg class="icon"><use href="#i-plus"/></svg>点单品上的 ＋，放进右侧搭配画布。</p>
+      <p class="closet-tip" id="closet-tip" hidden><svg class="icon"><use href="#i-plus"/></svg>点名称查看档案；点 ＋ 加入搭配画布。</p>
     </div>
     <aside class="styling-panel" aria-label="搭配工作台">
       <div class="section-heading"><div><p class="eyebrow">THE STYLING TABLE</p><h2>今天，怎么搭？</h2></div><div class="mini-actions"><button id="undo" class="icon-button" aria-label="撤销画布操作" title="撤销" disabled><svg class="icon"><use href="#i-undo"/></svg></button><button id="new-outfit" class="icon-button" aria-label="新建搭配" title="新建搭配"><svg class="icon"><use href="#i-plus"/></svg></button></div></div>
@@ -67,10 +67,36 @@
 </main>
 <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden>
 <input id="restore-input" type="file" accept="application/json,.json" hidden>
-<dialog id="upload-dialog" class="modal upload-modal"><div class="modal-heading"><div><p class="eyebrow">MAKE ROOM FOR YOUR FAVORITES</p><h2>放进衣橱</h2></div><button class="icon-button" data-close="upload-dialog" aria-label="关闭上传窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="muted">名字可以留空，分类以后也能改。先把喜欢的衣服收进来。</p><div class="batch-category"><label for="batch-category">这一批先放到</label><select id="batch-category"><option value="auto">按文件名建议分类</option></select><span class="subtle">可逐件修改</span></div><p id="upload-progress" class="upload-progress" role="status"></p><div id="upload-errors" class="notice error-notice" hidden></div><div id="upload-list" class="upload-list"></div><div class="modal-footer"><button id="pick-more" class="button secondary"><svg class="icon"><use href="#i-plus"/></svg>继续选图</button><button id="confirm-upload" class="button primary" disabled>保存到衣橱</button></div></dialog>
-<dialog id="edit-dialog" class="modal edit-modal"><div class="modal-heading"><div><p class="eyebrow">A CLOSER LOOK</p><h2>这件喜欢</h2></div><button class="icon-button" data-close="edit-dialog" aria-label="关闭单品窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="edit-content"><div><div class="edit-preview"><img id="edit-image" alt="单品预览"></div><div class="image-tools"><button class="button small secondary" id="clean-background">去除浅色背景</button><button class="text-button" id="restore-original">恢复原图</button></div><p class="fine-print">浅色背景处理适合白底单品图，可能影响白色衣服。保存前请检查；原图会保留。</p></div><form id="edit-form"><label>名字 <span class="subtle">选填</span><input id="edit-name" maxlength="100" placeholder="留空时使用默认名称"></label><label>分类<select id="edit-category"></select></label><label>颜色 <span class="subtle">选填</span><input id="edit-color" maxlength="30" placeholder="例如：奶油白、酒红"></label><label>一点记录 <span class="subtle">选填</span><textarea id="edit-notes" maxlength="1500" rows="4" placeholder="品牌、尺码，或喜欢它的理由…"></textarea></label><button type="submit" class="button primary full-width">保存修改</button></form></div><div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div></dialog>
-<dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>照片和搭配保存在当前设备的浏览器里。</strong><p>换浏览器、清理网站数据或使用无痕模式，都可能让记录无法保留。建议定期导出备份。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、单品信息和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。网页公开访问时，浏览器里的衣服也不会自动上传到 GitHub。</p></dialog>
-<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="upload-dialog" class="modal upload-modal"><div class="modal-heading"><div><p class="eyebrow">MAKE ROOM FOR YOUR FAVORITES</p><h2>放进衣橱</h2></div><button class="icon-button" data-close="upload-dialog" aria-label="关闭上传窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="muted">名字可以留空，分类以后也能改。保存后点衣服名称或铅笔按钮，补充品牌、尺码和购入记录。</p><div class="batch-category"><label for="batch-category">这一批先放到</label><select id="batch-category"><option value="auto">按文件名建议分类</option></select><span class="subtle">可逐件修改</span></div><p id="upload-progress" class="upload-progress" role="status"></p><div id="upload-errors" class="notice error-notice" hidden></div><div id="upload-list" class="upload-list"></div><div class="modal-footer"><button id="pick-more" class="button secondary"><svg class="icon"><use href="#i-plus"/></svg>继续选图</button><button id="confirm-upload" class="button primary" disabled>保存到衣橱</button></div></dialog>
+<dialog id="edit-dialog" class="modal edit-modal" aria-labelledby="edit-title">
+  <div class="modal-heading"><div><p class="eyebrow">YOUR GARMENT RECORD</p><h2 id="edit-title">单品档案</h2></div><button class="icon-button" data-close="edit-dialog" aria-label="关闭单品窗口"><svg class="icon"><use href="#i-close"/></svg></button></div>
+  <div class="edit-content">
+    <div class="edit-image-column"><div class="edit-preview"><img id="edit-image" alt="单品预览"></div><div class="image-tools"><button class="button small secondary" id="clean-background">去除浅色背景</button><button class="text-button" id="restore-original">恢复原图</button></div><p class="fine-print">浅色背景处理适合白底单品图，可能影响白色衣服。保存前请检查；原图会保留。</p></div>
+    <form id="edit-form">
+      <p class="record-hint">以下内容均可选填，随时补充。</p>
+      <fieldset class="record-group"><legend>基本信息</legend><div class="record-fields">
+        <label for="edit-name">名称<input id="edit-name" maxlength="100" placeholder="例如：The Simone"></label>
+        <label for="edit-brand">品牌<input id="edit-brand" maxlength="100" placeholder="例如：Réalisation Par"></label>
+        <label for="edit-color">配色<input id="edit-color" maxlength="80" placeholder="例如：Chocolate Havana"></label>
+        <label for="edit-size">尺码<input id="edit-size" maxlength="40" placeholder="例如：XS、UK 8"></label>
+        <label for="edit-category">分类<select id="edit-category"></select></label>
+        <label for="edit-subcategory">细分类<input id="edit-subcategory" maxlength="100" placeholder="例如：Maxi Dress / 长裙"></label>
+        <label for="edit-style">款式<input id="edit-style" maxlength="200" placeholder="例如：挂脖、露背、修身"></label>
+        <label for="edit-pattern">图案<input id="edit-pattern" maxlength="100" placeholder="例如：棕白花卉印花"></label>
+      </div></fieldset>
+      <fieldset class="record-group"><legend>购入记录</legend><div class="record-fields">
+        <div class="price-field field-wide"><label for="edit-price">购入价格</label><div class="price-inputs"><select id="edit-currency" aria-label="价格币种"><option value="GBP">£ 英镑</option><option value="EUR">€ 欧元</option><option value="USD">$ 美元</option><option value="CNY">¥ 人民币</option><option value="HKD">HK$ 港币</option><option value="JPY">¥ 日元</option></select><input id="edit-price" type="number" min="0" max="999999999.99" step="0.01" inputmode="decimal" placeholder="留空表示未记录"></div></div>
+        <label for="edit-date">购入日期<input id="edit-date" type="date"></label>
+        <label for="edit-status">购入状态<select id="edit-status"><option value="owned">已购入</option><option value="wishlist">想买</option></select></label>
+      </div></fieldset>
+      <label for="edit-notes">备注<textarea id="edit-notes" maxlength="1500" rows="3" placeholder="购买渠道、面料，或喜欢它的理由…"></textarea></label>
+      <button type="submit" class="button primary full-width">保存档案</button>
+    </form>
+  </div>
+  <div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div>
+</dialog>
+<dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>照片和搭配保存在当前设备的浏览器里。</strong><p>换浏览器、清理网站数据或使用无痕模式，都可能让记录无法保留。建议定期导出备份。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、完整单品档案和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。网页公开访问时，浏览器里的衣服也不会自动上传到 GitHub。</p></dialog>
+<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、价格、日期和购入状态；留空也能保存。完整档案会随备份一起保留。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
 <dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p></dialog>

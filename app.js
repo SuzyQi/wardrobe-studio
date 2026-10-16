@@ -2,6 +2,9 @@
   'use strict';
   const C = window.WardrobeCore, DB = window.WardrobeStorage, I = window.WardrobeImages;
   const $ = id => document.getElementById(id);
+  const detailInputs = { brand: 'edit-brand', color: 'edit-color', subcategory: 'edit-subcategory', style: 'edit-style',
+    pattern: 'edit-pattern', size: 'edit-size', notes: 'edit-notes', purchasePrice: 'edit-price', currency: 'edit-currency',
+    purchaseDate: 'edit-date', purchaseStatus: 'edit-status' };
   const state = { garments: [], outfits: [], layers: [], background: C.BACKGROUNDS[0],
     activeId: null, selected: null, category: 'all', favorites: false, query: '', sort: 'newest',
     view: 'closet', history: [], future: [], ready: false };
@@ -96,7 +99,7 @@
     renderTabs(); $('garment-count').textContent = state.garments.length;
     $('favorite-filter').setAttribute('aria-pressed', String(state.favorites));
     let items = state.garments.filter(g => (state.category === 'all' || state.category === g.category) &&
-      (!state.favorites || g.favorite) && (!state.query || [g.name, g.color, g.notes, C.categoryLabel(g.category)].join(' ').toLowerCase().includes(state.query)));
+      (!state.favorites || g.favorite) && (!state.query || C.matchesGarment(g, state.query)));
     items.sort((a, b) => state.sort === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : state.sort === 'category' ? a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'zh-CN') : b.createdAt.localeCompare(a.createdAt));
     const grid = $('garment-grid'); grid.replaceChildren();
     const allEmpty = state.garments.length === 0;
@@ -120,8 +123,18 @@
       const edit = action('编辑' + g.name, 'edit', 'icon-button card-edit'); edit.onclick = () => openEdit(g.id);
       const add = action('加入搭配：' + g.name, 'plus', 'card-add'); add.onclick = () => addLayer(g.id);
       visual.append(imageButton, favorite, edit, add); if (g.demo) visual.append(node('span', 'demo-badge', 'DEMO'));
-      card.append(visual, node('h3', 'garment-name', g.name));
-      const meta = node('div', 'garment-meta'); meta.append(node('span', 'color-dot'), node('span', '', C.categoryLabel(g.category) + (g.color ? ' · ' + g.color : ''))); card.append(meta); grid.append(card);
+      const heading = node('h3', 'garment-name'), title = node('button', 'garment-title', g.name);
+      title.type = 'button'; title.setAttribute('aria-label', '查看单品档案：' + g.name); title.onclick = () => openEdit(g.id); heading.append(title);
+      card.append(visual, heading);
+      if (g.brand) card.append(node('p', 'garment-brand', g.brand));
+      const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); card.append(meta);
+      const price = C.formatPrice(g);
+      if (price || g.purchaseStatus === 'wishlist') {
+        const purchase = node('div', 'garment-purchase');
+        if (price) purchase.append(node('span', 'garment-price', price));
+        purchase.append(node('span', 'purchase-badge', C.PURCHASE_STATUSES[g.purchaseStatus] || '已购入')); card.append(purchase);
+      }
+      grid.append(card);
     }
     if (items.length) {
       const tile = node('button', 'upload-tile'); tile.type = 'button'; tile.append(icon('plus'), node('span', '', '放进衣橱')); tile.onclick = pickFiles; grid.append(tile);
@@ -291,7 +304,7 @@
     await work('正在把喜欢的衣服收进衣橱…', async () => {
       const now = new Date().toISOString();
       const records = staged.map(g => ({ id: g.id, image: g.image, thumb: g.thumb, original: g.original, aspect: g.aspect,
-        name: g.name.trim() || stageName(g), category: g.category, color: '', notes: '', favorite: false, demo: false, createdAt: now, updatedAt: now }));
+        name: g.name.trim() || stageName(g), category: g.category, ...C.garmentDetails(), favorite: false, demo: false, createdAt: now, updatedAt: now }));
       await DB.write(records.map(value => ({ store: 'garments', value })));
       state.garments.push(...records); const count = records.length; staged = [];
       state.category = 'all'; state.favorites = false; state.query = ''; $('search').value = '';
@@ -299,16 +312,18 @@
     });
   }
   function openEdit(id) {
-    const g = garment(id); if (!g) return; editing = { ...g };
+    const g = garment(id); if (!g) return; editing = { ...g, ...C.garmentDetails(g) };
     $('edit-image').src = url(editing.image); $('edit-name').value = g.name;
-    $('edit-category').value = g.category; $('edit-color').value = g.color; $('edit-notes').value = g.notes;
+    $('edit-category').value = g.category;
+    for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
     $('edit-dialog').showModal();
   }
   async function saveEdit(e) {
     e.preventDefault(); if (!editing) return;
+    const details = C.garmentDetails(Object.fromEntries(Object.entries(detailInputs).map(([field, inputId]) => [field, $(inputId).value])));
     await work('正在保存单品…', async () => {
       const value = { ...editing, name: $('edit-name').value.trim() || C.defaultName($('edit-category').value, state.garments.findIndex(g => g.id === editing.id) + 1, $('edit-color').value),
-        category: $('edit-category').value, color: $('edit-color').value.trim(), notes: $('edit-notes').value.trim(), updatedAt: new Date().toISOString() };
+        category: $('edit-category').value, ...details, updatedAt: new Date().toISOString() };
       await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g);
       $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); toast('单品已更新。');
     });
@@ -431,7 +446,7 @@
         const svg = new Blob([sample.svg], { type: 'image/svg+xml' }), img = await I.load(svg);
         const c = I.canvas(img.naturalWidth, img.naturalHeight); c.getContext('2d').drawImage(img, 0, 0);
         const png = await I.blob(c), prepared = await I.prepare(png);
-        records.push({ id: C.id(), ...prepared, name: sample.name, category: sample.category, color: sample.color,
+        records.push({ id: C.id(), ...prepared, ...C.garmentDetails(), name: sample.name, category: sample.category, color: sample.color,
           notes: '示例插画，可在使用小贴士中统一移除。', demo: true, favorite: false, createdAt: now, updatedAt: now });
       }
       await DB.write(records.map(value => ({ store: 'garments', value }))); state.garments.push(...records); renderCloset(); toast('示例衣橱准备好了，点 ＋ 开始搭配。');
@@ -496,7 +511,7 @@
   bindBoard();
   try {
     await DB.open(); const results = await Promise.all([DB.read('garments'), DB.read('outfits'), DB.read('meta')]);
-    state.garments = results[0]; state.outfits = results[1]; state.ready = true;
+    state.garments = results[0].map(g => ({ ...g, ...C.garmentDetails(g) })); state.outfits = results[1]; state.ready = true;
     const draft = results[2].find(v => v.id === 'draft');
     if (draft && Array.isArray(draft.layers)) applySnapshot(draft); else renderBoard();
     renderCloset(); renderOutfits(); $('storage-status').textContent = '照片与搭配保存在此浏览器';

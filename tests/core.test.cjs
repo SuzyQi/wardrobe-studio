@@ -71,3 +71,38 @@ test('deleting one garment removes all its instances and leaves other outfit ite
   assert.equal(changed[0].layers.length, 1); assert.equal(changed[0].layers[0].garmentId, 'g_2');
   assert.equal(source[0].layers.length, 3);
 });
+
+test('a detailed garment record survives backup restore with its purchase information', () => {
+  const details = { brand: 'Réalisation Par', color: 'Chocolate Havana', subcategory: 'Maxi Dress', style: '挂脖、露背、修身长裙',
+    pattern: '棕白花卉印花', size: 'XS', purchasePrice: 290, currency: 'GBP', purchaseDate: '2024-06-26', purchaseStatus: 'owned', notes: '官网购入' };
+  const source = backup(); Object.assign(source.garments[0], details);
+  const restored = C.validateBackup(JSON.parse(JSON.stringify(source))).garments[0];
+  for (const [field, value] of Object.entries(details)) assert.equal(restored[field], value, field);
+  assert.equal(C.formatPrice(restored), '£290.00');
+  assert.equal(restored.image, PNG);
+});
+test('old records and blank purchases remain optional, while zero-price purchases are preserved', () => {
+  const old = C.validateBackup(backup()).garments[0];
+  assert.equal(old.brand, ''); assert.equal(old.purchasePrice, null); assert.equal(old.purchaseDate, '');
+  assert.equal(old.currency, 'GBP'); assert.equal(old.purchaseStatus, 'owned'); assert.equal(C.formatPrice(old), '');
+  assert.equal(C.garmentDetails({ purchasePrice: '' }).purchasePrice, null);
+  assert.equal(C.garmentDetails({ purchasePrice: '0' }).purchasePrice, 0);
+  assert.equal(C.formatPrice(C.garmentDetails({ purchasePrice: 0 })), '£0.00');
+  assert.equal(C.garmentDetails({ purchaseDate: '2024-02-29' }).purchaseDate, '2024-02-29');
+});
+test('invalid purchase amounts, currencies, dates and statuses cannot silently enter a backup', () => {
+  for (const purchasePrice of [-1, Infinity, 'free', true, '12.345', 1e12]) {
+    const source = backup(); source.garments[0].purchasePrice = purchasePrice;
+    assert.throws(() => C.validateBackup(source), /价格/);
+  }
+  for (const purchaseDate of ['2025-02-29', '2024-06-31', '2024-13-01', '26/06/2024']) {
+    assert.throws(() => C.garmentDetails({ purchaseDate }), /日期/);
+  }
+  assert.throws(() => C.garmentDetails({ currency: 'invalid' }), /币种/);
+  assert.throws(() => C.garmentDetails({ purchaseStatus: '__proto__' }), /状态/);
+});
+test('garments can be found by brand without accents, detailed category, style, pattern or size', () => {
+  const g = { ...item(), brand: 'Réalisation Par', subcategory: 'Maxi Dress', style: '挂脖露背', pattern: '棕白花卉印花', size: 'XS' };
+  for (const query of ['realisation', 'RÉALISATION PAR', 'maxi', '露背', '花卉', 'xs']) assert.ok(C.matchesGarment(g, query), query);
+  assert.equal(C.matchesGarment(g, '纯色毛衣'), false);
+});
