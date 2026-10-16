@@ -4,9 +4,10 @@
   const $ = id => document.getElementById(id);
   const detailInputs = { brand: 'edit-brand', color: 'edit-color', subcategory: 'edit-subcategory', style: 'edit-style',
     pattern: 'edit-pattern', size: 'edit-size', notes: 'edit-notes', purchasePrice: 'edit-price', currency: 'edit-currency',
-    purchaseDate: 'edit-date', purchaseStatus: 'edit-status' };
+    purchaseDate: 'edit-date', purchaseStatus: 'edit-status', originalPrice: 'edit-original-price', purchaseCondition: 'edit-condition',
+    purchaseType: 'edit-purchase-type', purchaseSource: 'edit-source' };
   const state = { garments: [], outfits: [], layers: [], background: C.BACKGROUNDS[0],
-    activeId: null, selected: null, category: 'all', favorites: false, query: '', sort: 'newest',
+    activeId: null, selected: null, category: 'all', brand: '', favorites: false, query: '', sort: 'newest',
     view: 'closet', history: [], future: [], ready: false };
   let staged = [], editing = null, processing = false, busy = false, toastTimer, draftTimer;
   let draftChain = Promise.resolve(), sliderStart = null;
@@ -95,19 +96,41 @@
       $('category-tabs').append(b);
     }
   }
+  function renderBrands() {
+    const options = C.brandOptions(state.garments), select = $('brand-filter');
+    if (state.brand && !options.some(b => b.value === state.brand)) state.brand = '';
+    select.replaceChildren(); const all = node('option', '', '全部品牌'); all.value = ''; select.append(all);
+    $('brand-suggestions').replaceChildren();
+    for (const brand of options) {
+      const opt = node('option', '', brand.label + '（' + brand.count + '）'); opt.value = brand.value; select.append(opt);
+      if (brand.value !== 'unbranded') { const suggestion = node('option'); suggestion.value = brand.label; $('brand-suggestions').append(suggestion); }
+    }
+    select.value = state.brand;
+  }
+  function renderValue() {
+    const value = C.wardrobeValue(state.garments);
+    for (const [id, key] of [['closet-purchase-total', 'purchaseTotal'], ['closet-original-total', 'originalTotal']]) {
+      const amounts = value.totals.filter(g => g[key] !== null); const el = $(id); el.replaceChildren();
+      if (!amounts.length) el.append(node('span', 'value-placeholder', '暂无记录'));
+      for (const g of amounts) { const amount = node('span', 'value-amount', C.formatMoney(g[key], g.currency)); amount.dataset.currency = g.currency; el.append(amount); }
+    }
+    $('closet-value-note').textContent = value.count ? '已购入 ' + value.count + ' 件 · 实付已记录 ' + value.pricedCount + ' 件 · ' + value.unpricedCount + ' 件未填 · 原价已记录 ' + value.originalCount + ' 件。想买与示例不计入，不同币种分别统计。' : '填写实际购入价后自动汇总。仅统计已购入单品，想买与示例不计入；不同币种分别统计。';
+  }
   function renderCloset() {
-    renderTabs(); $('garment-count').textContent = state.garments.length;
+    renderTabs(); renderBrands(); renderValue(); $('garment-count').textContent = state.garments.length;
     $('favorite-filter').setAttribute('aria-pressed', String(state.favorites));
-    let items = state.garments.filter(g => (state.category === 'all' || state.category === g.category) &&
+    let items = state.garments.filter(g => (state.category === 'all' || state.category === g.category) && C.matchesBrand(g, state.brand) &&
       (!state.favorites || g.favorite) && (!state.query || C.matchesGarment(g, state.query)));
     items.sort((a, b) => state.sort === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : state.sort === 'category' ? a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'zh-CN') : b.createdAt.localeCompare(a.createdAt));
     const grid = $('garment-grid'); grid.replaceChildren();
     const allEmpty = state.garments.length === 0;
     $('closet-empty').hidden = !allEmpty; $('no-results').hidden = allEmpty || items.length > 0;
     grid.hidden = allEmpty || items.length === 0; $('closet-tip').hidden = allEmpty || !items.length;
-    const filtering = state.category !== 'all' || state.favorites || state.query;
+    const filtering = state.category !== 'all' || state.brand || state.favorites || state.query;
     $('filter-summary').hidden = !filtering || allEmpty;
-    $('filter-summary').textContent = '找到 ' + items.length + ' 件单品';
+    const filteredValue = C.wardrobeValue(items);
+    const subtotal = filteredValue.totals.filter(g => g.purchaseTotal !== null).map(g => C.formatMoney(g.purchaseTotal, g.currency)).join('、');
+    $('filter-summary').textContent = '找到 ' + items.length + ' 件单品 · 已购入实付小计：' + (subtotal || '未记录') + (filteredValue.unpricedCount ? ' · ' + filteredValue.unpricedCount + ' 件未填实付价' : '');
     for (const g of items) {
       const card = node('article', 'garment-card'); card.dataset.garmentId = g.id;
       const visual = node('div', 'garment-visual');
@@ -128,11 +151,14 @@
       card.append(visual, heading);
       if (g.brand) card.append(node('p', 'garment-brand', g.brand));
       const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); card.append(meta);
-      const price = C.formatPrice(g);
-      if (price || g.purchaseStatus === 'wishlist') {
+      const price = C.formatPrice(g), original = C.formatPrice(g, 'originalPrice');
+      if (price || original || g.purchaseStatus === 'wishlist' || g.purchaseCondition || g.purchaseType) {
         const purchase = node('div', 'garment-purchase');
-        if (price) purchase.append(node('span', 'garment-price', price));
+        if (price) purchase.append(node('span', 'garment-price', '实付 ' + price));
+        if (original) purchase.append(node('span', 'garment-original', '原价 ' + original));
         purchase.append(node('span', 'purchase-badge', C.PURCHASE_STATUSES[g.purchaseStatus] || '已购入')); card.append(purchase);
+        if (g.purchaseCondition) purchase.append(node('span', 'purchase-badge', C.PURCHASE_CONDITIONS[g.purchaseCondition]));
+        if (g.purchaseType) purchase.append(node('span', 'purchase-badge', C.PURCHASE_TYPES[g.purchaseType]));
       }
       grid.append(card);
     }
@@ -307,7 +333,7 @@
         name: g.name.trim() || stageName(g), category: g.category, ...C.garmentDetails(), favorite: false, demo: false, createdAt: now, updatedAt: now }));
       await DB.write(records.map(value => ({ store: 'garments', value })));
       state.garments.push(...records); const count = records.length; staged = [];
-      state.category = 'all'; state.favorites = false; state.query = ''; $('search').value = '';
+      state.category = 'all'; state.brand = ''; state.favorites = false; state.query = ''; $('search').value = '';
       $('upload-dialog').close(); renderCloset(); toast(count + ' 件衣服已放进衣橱。');
     });
   }
@@ -475,9 +501,10 @@
   listen('batch-category', 'change', () => { const value = $('batch-category').value;
     for (const g of staged) g.category = value === 'auto' ? C.suggestCategory(g.filename) : value; renderStaged(); });
   listen('search', 'input', e => { state.query = e.target.value.trim().toLowerCase(); renderCloset(); });
+  listen('brand-filter', 'change', e => { state.brand = e.target.value; renderCloset(); });
   listen('sort', 'change', e => { state.sort = e.target.value; renderCloset(); });
   listen('favorite-filter', 'click', () => { state.favorites = !state.favorites; renderCloset(); });
-  listen('reset-filters', 'click', () => { state.category = 'all'; state.favorites = false; state.query = ''; $('search').value = ''; renderCloset(); });
+  listen('reset-filters', 'click', () => { state.category = 'all'; state.brand = ''; state.favorites = false; state.query = ''; $('search').value = ''; renderCloset(); });
   listen('undo', 'click', undo); listen('new-outfit', 'click', newOutfit); listen('outfits-new', 'click', newOutfit);
   listen('go-style', 'click', () => setView('closet')); listen('arrange-board', 'click', arrange);
   listen('remove-layer', 'click', removeLayer);

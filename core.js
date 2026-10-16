@@ -15,35 +15,74 @@
   const CAT_IDS = new Set(CATEGORIES.slice(1).map(c => c.id));
   const CURRENCIES = ['GBP', 'EUR', 'USD', 'CNY', 'HKD', 'JPY'];
   const PURCHASE_STATUSES = { owned: '已购入', wishlist: '想买' };
+  const PURCHASE_CONDITIONS = { '': '未记录', new: '全新', secondhand: '二手' };
+  const PURCHASE_TYPES = { '': '未记录', regular: '原价购买', sale: '折扣购买', sample_sale: 'Sample Sale', gift: '礼物' };
+  function optionalPrice(raw, label) {
+    if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+    if ((typeof raw !== 'number' && typeof raw !== 'string') || !/^\d+(?:\.\d{1,2})?$/.test(String(raw).trim())) throw new Error(label + '请填写非负金额，最多保留两位小数。');
+    const price = Number(raw);
+    if (!Number.isFinite(price) || price > 999999999.99) throw new Error(label + '超出可记录范围。');
+    return price;
+  }
   function garmentDetails(source = {}) {
     const details = {};
-    for (const [field, max] of Object.entries({ brand: 100, color: 80, subcategory: 100, style: 200, pattern: 100, size: 40, notes: 1500 })) {
+    for (const [field, max] of Object.entries({ brand: 100, color: 80, subcategory: 100, style: 200, pattern: 100, size: 40, purchaseSource: 100, notes: 1500 })) {
       details[field] = typeof source[field] === 'string' ? source[field].trim().slice(0, max) : '';
     }
-    const raw = source.purchasePrice;
-    let price = null;
-    if (raw !== undefined && raw !== null && String(raw).trim() !== '') {
-      if ((typeof raw !== 'number' && typeof raw !== 'string') || !/^\d+(?:\.\d{1,2})?$/.test(String(raw).trim())) throw new Error('购入价格请填写非负金额，最多保留两位小数。');
-      price = Number(raw);
-      if (!Number.isFinite(price) || price > 999999999.99) throw new Error('购入价格超出可记录范围。');
-    }
-    details.purchasePrice = price;
+    details.purchasePrice = optionalPrice(source.purchasePrice, '实际购入价格');
+    details.originalPrice = optionalPrice(source.originalPrice, '原价');
     details.currency = source.currency || 'GBP';
     if (!CURRENCIES.includes(details.currency)) throw new Error('价格币种无效。');
     details.purchaseStatus = source.purchaseStatus || 'owned';
     if (!Object.hasOwn(PURCHASE_STATUSES, details.purchaseStatus)) throw new Error('购入状态无效。');
+    details.purchaseCondition = source.purchaseCondition || '';
+    details.purchaseType = source.purchaseType || '';
+    if (!Object.hasOwn(PURCHASE_CONDITIONS, details.purchaseCondition)) throw new Error('全新或二手记录无效。');
+    if (!Object.hasOwn(PURCHASE_TYPES, details.purchaseType)) throw new Error('购入方式无效。');
     const date = source.purchaseDate || '';
     if (typeof date !== 'string' || (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number(date.slice(0, 4)) < 1 || Number.isNaN(Date.parse(date + 'T00:00:00Z')) || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date))) throw new Error('请填写有效的购入日期。');
     details.purchaseDate = date;
     return details;
   }
-  function formatPrice(garment) {
-    if (garment.purchasePrice === null || garment.purchasePrice === undefined || garment.purchasePrice === '') return '';
-    return new Intl.NumberFormat('en-GB', { style: 'currency', currency: garment.currency || 'GBP', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(garment.purchasePrice);
+  function formatMoney(amount, currency = 'GBP') {
+    return new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+  }
+  function formatPrice(garment, field = 'purchasePrice') {
+    if (garment[field] === null || garment[field] === undefined || garment[field] === '') return '';
+    return formatMoney(garment[field], garment.currency || 'GBP');
+  }
+  const folded = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim().replace(/\s+/g, ' ');
+  function brandOptions(garments) {
+    const brands = new Map();
+    for (const g of garments) {
+      const key = folded(g.brand), value = key ? 'brand:' + key : 'unbranded';
+      if (!brands.has(value)) brands.set(value, { value, label: key ? g.brand.trim().replace(/\s+/g, ' ') : '未填写品牌', count: 0 });
+      brands.get(value).count++;
+    }
+    return [...brands.values()].sort((a, b) => a.value === 'unbranded' ? 1 : b.value === 'unbranded' ? -1 : a.label.localeCompare(b.label, 'zh-CN'));
+  }
+  function matchesBrand(garment, value) {
+    const key = folded(garment.brand);
+    return !value || value === (key ? 'brand:' + key : 'unbranded');
+  }
+  function wardrobeValue(garments) {
+    const owned = garments.filter(g => !g.demo && (!g.purchaseStatus || g.purchaseStatus === 'owned'));
+    const currencies = new Map(); let pricedCount = 0, originalCount = 0;
+    for (const g of owned) {
+      const currency = g.currency || 'GBP';
+      for (const [field, totalKey, countKey] of [['purchasePrice', 'purchaseCents', 'pricedCount'], ['originalPrice', 'originalCents', 'originalCount']]) {
+        if (typeof g[field] !== 'number' || !Number.isFinite(g[field]) || g[field] < 0) continue;
+        if (!currencies.has(currency)) currencies.set(currency, { currency, purchaseCents: 0, originalCents: 0, pricedCount: 0, originalCount: 0 });
+        const bucket = currencies.get(currency); bucket[totalKey] += Math.round(g[field] * 100); bucket[countKey]++;
+        if (field === 'purchasePrice') pricedCount++; else originalCount++;
+      }
+    }
+    return { count: owned.length, pricedCount, unpricedCount: owned.length - pricedCount, originalCount,
+      totals: [...currencies.values()].sort((a, b) => CURRENCIES.indexOf(a.currency) - CURRENCIES.indexOf(b.currency)).map(g => ({ currency: g.currency,
+        purchaseTotal: g.pricedCount ? g.purchaseCents / 100 : null, originalTotal: g.originalCount ? g.originalCents / 100 : null })) };
   }
   function matchesGarment(garment, query) {
-    const fold = value => String(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    return fold([garment.name, garment.brand, garment.color, garment.subcategory, garment.style, garment.pattern, garment.size, garment.notes, categoryLabel(garment.category)].join(' ')).includes(fold(query).trim());
+    return folded([garment.name, garment.brand, garment.color, garment.subcategory, garment.style, garment.pattern, garment.size, garment.purchaseSource, garment.notes, categoryLabel(garment.category)].join(' ')).includes(folded(query));
   }
   const BACKGROUNDS = ['#f8f7f3', '#edf1f2', '#f3edeb'];
   const LEGACY_BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6', '#fff1b5', '#c1dbe8', '#43302e'];
@@ -152,6 +191,6 @@
   function removeGarmentReferences(outfits, garmentId) {
     return outfits.map(o => ({ ...o, layers: o.layers.filter(l => l.garmentId !== garmentId) }));
   }
-  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, garmentDetails, formatPrice, matchesGarment, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
+  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, PURCHASE_CONDITIONS, PURCHASE_TYPES, garmentDetails, formatMoney, formatPrice, matchesGarment, brandOptions, matchesBrand, wardrobeValue, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
     defaultName, alphaBounds, defaultLayer, positionLayer, validateBackup, removeGarmentReferences };
 });

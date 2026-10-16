@@ -39,3 +39,18 @@
 .price-inputs select{width:105px;flex-shrink:0}
 .price-inputs input{flex:1;width:0}
 @media(max-width:660px){.edit-modal{width:calc(100% - 22px)}.edit-content{grid-template-columns:1fr;gap:20px}.edit-image-column{position:static}.edit-preview{height:230px}.record-fields{gap:12px 10px}.edit-content input,.edit-content select,.edit-content textarea{font-size:16px}.garment-brand{font-size:9px}.garment-price{font-size:10px}}
+
+/* Purchase value and brand browsing. */
+.value-overview{background:#f0f3f2;border:1px solid var(--line);border-radius:12px;padding:16px 18px 12px;margin-bottom:20px}
+.value-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.value-metrics>div+div{padding-left:18px;border-left:1px solid var(--line)}
+.value-label{font-size:10px;color:var(--muted);margin-bottom:6px}
+.value-total{display:flex;flex-direction:column;gap:3px;font:24px/1.4 var(--serif);color:var(--accent);overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.original-total{font-size:21px;color:var(--muted)}
+.value-placeholder{font:13px/1.8 var(--sans);color:var(--muted)}
+.value-note{font-size:9px;color:var(--muted);line-height:1.8;margin-top:12px}
+.brand-filter-row{display:flex;gap:10px;align-items:center;margin:-5px 0 17px;font-size:11px;color:var(--muted)}
+.brand-filter-row select{min-width:0;max-width:calc(100% - 40px);padding:7px 28px 7px 10px;border:1px solid var(--line);border-radius:7px;background:var(--white);font-size:11px;color:var(--ink)}
+.garment-original{font-size:9px;color:var(--muted)}
+.record-note{font-size:10px;color:var(--muted);line-height:1.8}
+@media(max-width:660px){.value-overview{padding:14px 14px 11px}.value-metrics{gap:12px}.value-metrics>div+div{padding-left:12px}.value-total{font-size:23px}.original-total{font-size:20px}.brand-filter-row select{min-height:38px;font-size:12px}}

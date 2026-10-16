@@ -74,16 +74,19 @@ test('deleting one garment removes all its instances and leaves other outfit ite
 
 test('a detailed garment record survives backup restore with its purchase information', () => {
   const details = { brand: 'Réalisation Par', color: 'Chocolate Havana', subcategory: 'Maxi Dress', style: '挂脖、露背、修身长裙',
-    pattern: '棕白花卉印花', size: 'XS', purchasePrice: 290, currency: 'GBP', purchaseDate: '2024-06-26', purchaseStatus: 'owned', notes: '官网购入' };
+    pattern: '棕白花卉印花', size: 'XS', purchasePrice: 290, originalPrice: 390, currency: 'GBP', purchaseDate: '2024-06-26', purchaseStatus: 'owned',
+    purchaseCondition: 'secondhand', purchaseType: 'sale', purchaseSource: 'Vinted', notes: '官网购入' };
   const source = backup(); Object.assign(source.garments[0], details);
   const restored = C.validateBackup(JSON.parse(JSON.stringify(source))).garments[0];
   for (const [field, value] of Object.entries(details)) assert.equal(restored[field], value, field);
   assert.equal(C.formatPrice(restored), '£290.00');
+  assert.equal(C.formatPrice(restored, 'originalPrice'), '£390.00');
   assert.equal(restored.image, PNG);
 });
 test('old records and blank purchases remain optional, while zero-price purchases are preserved', () => {
   const old = C.validateBackup(backup()).garments[0];
   assert.equal(old.brand, ''); assert.equal(old.purchasePrice, null); assert.equal(old.purchaseDate, '');
+  assert.equal(old.originalPrice, null); assert.equal(old.purchaseCondition, ''); assert.equal(old.purchaseType, ''); assert.equal(old.purchaseSource, '');
   assert.equal(old.currency, 'GBP'); assert.equal(old.purchaseStatus, 'owned'); assert.equal(C.formatPrice(old), '');
   assert.equal(C.garmentDetails({ purchasePrice: '' }).purchasePrice, null);
   assert.equal(C.garmentDetails({ purchasePrice: '0' }).purchasePrice, 0);
@@ -100,9 +103,44 @@ test('invalid purchase amounts, currencies, dates and statuses cannot silently e
   }
   assert.throws(() => C.garmentDetails({ currency: 'invalid' }), /币种/);
   assert.throws(() => C.garmentDetails({ purchaseStatus: '__proto__' }), /状态/);
+  assert.throws(() => C.garmentDetails({ originalPrice: -2 }), /原价/);
+  assert.throws(() => C.garmentDetails({ purchaseCondition: '__proto__' }), /二手/);
+  assert.throws(() => C.garmentDetails({ purchaseType: 'invented' }), /方式/);
 });
 test('garments can be found by brand without accents, detailed category, style, pattern or size', () => {
   const g = { ...item(), brand: 'Réalisation Par', subcategory: 'Maxi Dress', style: '挂脖露背', pattern: '棕白花卉印花', size: 'XS' };
   for (const query of ['realisation', 'RÉALISATION PAR', 'maxi', '露背', '花卉', 'xs']) assert.ok(C.matchesGarment(g, query), query);
   assert.equal(C.matchesGarment(g, '纯色毛衣'), false);
+});
+
+test('wardrobe value separates currencies, actual spend and original prices and reports incomplete records', () => {
+  const records = [
+    { purchasePrice: 100, originalPrice: 290, currency: 'GBP', purchaseType: 'sale' },
+    { purchasePrice: 35, originalPrice: null, currency: 'GBP', purchaseCondition: 'secondhand' },
+    { purchasePrice: null, originalPrice: 60, currency: 'GBP' },
+    { purchasePrice: 0, originalPrice: 0, currency: 'GBP' },
+    { purchasePrice: 50, originalPrice: 100, currency: 'EUR' },
+    { purchasePrice: 1000, originalPrice: 1000, currency: 'GBP', purchaseStatus: 'wishlist' },
+    { purchasePrice: 1000, originalPrice: 1000, currency: 'GBP', demo: true }
+  ];
+  assert.deepEqual(C.wardrobeValue(records), { count: 5, pricedCount: 4, unpricedCount: 1, originalCount: 4,
+    totals: [{ currency: 'GBP', purchaseTotal: 135, originalTotal: 350 }, { currency: 'EUR', purchaseTotal: 50, originalTotal: 100 }] });
+  assert.deepEqual(C.wardrobeValue([]).totals, []);
+  assert.deepEqual(C.wardrobeValue([{ originalPrice: 100 }]).totals, [{ currency: 'GBP', purchaseTotal: null, originalTotal: 100 }]);
+  assert.equal(C.wardrobeValue([{ purchasePrice: .1 }, { purchasePrice: .2 }]).totals[0].purchaseTotal, .3);
+});
+test('secondhand prices can exceed the original price and the existing purchase amount stays unchanged', () => {
+  const old = C.garmentDetails({ purchasePrice: 100 }); assert.equal(old.originalPrice, null); assert.equal(old.purchasePrice, 100);
+  const premium = C.garmentDetails({ purchasePrice: 150, originalPrice: 100, purchaseCondition: 'secondhand' });
+  assert.equal(premium.purchasePrice, 150); assert.equal(premium.originalPrice, 100);
+});
+test('brand filters merge case, spacing and accents while keeping distinct brand names separate', () => {
+  const garments = [{ brand: 'Réalisation Par' }, { brand: 'realisation   PAR ' }, { brand: 'COS' }, { brand: 'Cosette' }, { brand: '' }];
+  const options = C.brandOptions(garments);
+  assert.equal(options.length, 4);
+  assert.equal(options.find(b => b.value === 'brand:realisation par').count, 2);
+  assert.equal(options.find(b => b.value === 'unbranded').count, 1);
+  assert.ok(C.matchesBrand(garments[1], 'brand:realisation par'));
+  assert.equal(C.matchesBrand(garments[3], 'brand:cos'), false);
+  assert.ok(C.matchesBrand(garments[4], 'unbranded'));
 });

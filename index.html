@@ -6,13 +6,13 @@
   <meta name="theme-color" content="#f8f7f3">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261016-records" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261016-records">
-  <script src="./core.js?v=20261016-records" defer></script>
-  <script src="./storage.js?v=20261016-records" defer></script>
-  <script src="./images.js?v=20261016-records" defer></script>
-  <script src="./demo.js?v=20261016-records" defer></script>
-  <script src="./app.js?v=20261016-records" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261016-value" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261016-value">
+  <script src="./core.js?v=20261016-value" defer></script>
+  <script src="./storage.js?v=20261016-value" defer></script>
+  <script src="./images.js?v=20261016-value" defer></script>
+  <script src="./demo.js?v=20261016-value" defer></script>
+  <script src="./app.js?v=20261016-value" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -44,7 +44,9 @@
   <section id="workspace" class="workspace" aria-label="我的衣橱与搭配画布">
     <div class="closet-panel">
       <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>我的衣橱 <span class="count" id="garment-count">0</span></h2></div><button id="favorite-filter" class="icon-button" aria-label="只看收藏" aria-pressed="false" title="只看收藏"><svg class="icon"><use href="#i-heart"/></svg></button></div>
+      <section class="value-overview" aria-label="衣橱价值统计"><div class="value-metrics"><div><p class="value-label">衣橱实付总额</p><div id="closet-purchase-total" class="value-total"><span class="value-placeholder">暂无记录</span></div></div><div><p class="value-label">原价合计</p><div id="closet-original-total" class="value-total original-total"><span class="value-placeholder">暂无记录</span></div></div></div><p id="closet-value-note" class="value-note">填写实际购入价后自动汇总。</p></section>
       <div class="closet-controls"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索名称、品牌、颜色、尺码…" aria-label="搜索衣服"></label><select id="sort" aria-label="单品排序"><option value="newest">最近添加</option><option value="name">名称顺序</option><option value="category">按分类</option></select></div>
+      <div class="brand-filter-row"><label for="brand-filter">品牌</label><select id="brand-filter"><option value="">全部品牌</option></select></div>
       <div id="category-tabs" class="category-tabs" aria-label="衣服分类"></div>
       <p id="filter-summary" class="filter-summary" hidden></p>
       <div id="garment-grid" class="garment-grid" aria-live="polite"></div>
@@ -76,7 +78,7 @@
       <p class="record-hint">以下内容均可选填，随时补充。</p>
       <fieldset class="record-group"><legend>基本信息</legend><div class="record-fields">
         <label for="edit-name">名称<input id="edit-name" maxlength="100" placeholder="例如：The Simone"></label>
-        <label for="edit-brand">品牌<input id="edit-brand" maxlength="100" placeholder="例如：Réalisation Par"></label>
+        <label for="edit-brand">品牌<input id="edit-brand" maxlength="100" list="brand-suggestions" placeholder="例如：Réalisation Par"></label>
         <label for="edit-color">配色<input id="edit-color" maxlength="80" placeholder="例如：Chocolate Havana"></label>
         <label for="edit-size">尺码<input id="edit-size" maxlength="40" placeholder="例如：XS、UK 8"></label>
         <label for="edit-category">分类<select id="edit-category"></select></label>
@@ -85,8 +87,13 @@
         <label for="edit-pattern">图案<input id="edit-pattern" maxlength="100" placeholder="例如：棕白花卉印花"></label>
       </div></fieldset>
       <fieldset class="record-group"><legend>购入记录</legend><div class="record-fields">
-        <div class="price-field field-wide"><label for="edit-price">购入价格</label><div class="price-inputs"><select id="edit-currency" aria-label="价格币种"><option value="GBP">£ 英镑</option><option value="EUR">€ 欧元</option><option value="USD">$ 美元</option><option value="CNY">¥ 人民币</option><option value="HKD">HK$ 港币</option><option value="JPY">¥ 日元</option></select><input id="edit-price" type="number" min="0" max="999999999.99" step="0.01" inputmode="decimal" placeholder="留空表示未记录"></div></div>
+        <div class="price-field field-wide"><label for="edit-price">实际购入价</label><div class="price-inputs"><select id="edit-currency" aria-label="价格币种"><option value="GBP">£ 英镑</option><option value="EUR">€ 欧元</option><option value="USD">$ 美元</option><option value="CNY">¥ 人民币</option><option value="HKD">HK$ 港币</option><option value="JPY">¥ 日元</option></select><input id="edit-price" type="number" min="0" max="999999999.99" step="0.01" inputmode="decimal" placeholder="当时真正支付的金额"></div></div>
+        <label for="edit-original-price">原价 / 吊牌价<input id="edit-original-price" type="number" min="0" max="999999999.99" step="0.01" inputmode="decimal" placeholder="不知道可留空"></label>
         <label for="edit-date">购入日期<input id="edit-date" type="date"></label>
+        <p class="record-note field-wide">原价与实付价使用上方币种。衣橱实付总额按实际购入价统计。</p>
+        <label for="edit-condition">全新 / 二手<select id="edit-condition"><option value="">未记录</option><option value="new">全新</option><option value="secondhand">二手</option></select></label>
+        <label for="edit-purchase-type">购入方式<select id="edit-purchase-type"><option value="">未记录</option><option value="regular">原价购买</option><option value="sale">折扣购买</option><option value="sample_sale">Sample Sale</option><option value="gift">礼物</option></select></label>
+        <label for="edit-source">购买渠道<input id="edit-source" maxlength="100" placeholder="例如：Vinted、官网、门店"></label>
         <label for="edit-status">购入状态<select id="edit-status"><option value="owned">已购入</option><option value="wishlist">想买</option></select></label>
       </div></fieldset>
       <label for="edit-notes">备注<textarea id="edit-notes" maxlength="1500" rows="3" placeholder="购买渠道、面料，或喜欢它的理由…"></textarea></label>
@@ -95,8 +102,9 @@
   </div>
   <div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div>
 </dialog>
+<datalist id="brand-suggestions"></datalist>
 <dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>照片和搭配保存在当前设备的浏览器里。</strong><p>换浏览器、清理网站数据或使用无痕模式，都可能让记录无法保留。建议定期导出备份。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、完整单品档案和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。网页公开访问时，浏览器里的衣服也不会自动上传到 GitHub。</p></dialog>
-<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、价格、日期和购入状态；留空也能保存。完整档案会随备份一起保留。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、原价、实际购入价、全新或二手、购入方式、购买渠道、日期和购入状态；留空也能保存。完整档案会随备份一起保留。</p></li><li><strong>查看衣橱价值与品牌</strong><p>衣橱顶部汇总已购入单品的实际花费与原价，并显示未填价格的数量。不同币种分开统计，想买和示例衣服不计入。用品牌下拉框筛选，或直接搜索品牌名。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
 <dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p></dialog>

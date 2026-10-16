@@ -42,7 +42,8 @@ test('the real edit handlers save, reopen, export and restore every record field
   assert.equal(app.errors.length, 0); openRecord(app);
   const inputs = { 'edit-name': 'The Simone', 'edit-brand': 'Réalisation Par', 'edit-color': 'Chocolate Havana', 'edit-category': 'dresses',
     'edit-subcategory': 'Maxi Dress', 'edit-style': '挂脖、露背、修身长裙', 'edit-pattern': '棕白花卉印花', 'edit-size': 'XS',
-    'edit-price': '290.00', 'edit-currency': 'GBP', 'edit-date': '2024-06-26', 'edit-status': 'owned', 'edit-notes': '官网购入' };
+    'edit-price': '290.00', 'edit-original-price': '390', 'edit-condition': 'secondhand', 'edit-purchase-type': 'sale', 'edit-source': 'Vinted',
+    'edit-currency': 'GBP', 'edit-date': '2024-06-26', 'edit-status': 'owned', 'edit-notes': '官网购入' };
   for (const [id, value] of Object.entries(inputs)) app.elements[id].value = value;
   app.elements['edit-form'].fire('submit'); await flush();
   assert.equal(app.errors.length, 0); assert.equal(records[0].brand, 'Réalisation Par'); assert.equal(records[0].purchasePrice, 290);
@@ -50,7 +51,7 @@ test('the real edit handlers save, reopen, export and restore every record field
   const reloaded = await start(records); openRecord(reloaded);
   for (const [id, value] of Object.entries(inputs)) assert.equal(reloaded.elements[id].value, id === 'edit-price' ? '290' : value, id);
   openRecord(reloaded, 1);
-  for (const id of ['edit-brand', 'edit-subcategory', 'edit-style', 'edit-pattern', 'edit-size', 'edit-price', 'edit-date']) assert.equal(reloaded.elements[id].value, '', id + ' must not leak across garments');
+  for (const id of ['edit-brand', 'edit-subcategory', 'edit-style', 'edit-pattern', 'edit-size', 'edit-price', 'edit-original-price', 'edit-condition', 'edit-purchase-type', 'edit-source', 'edit-date']) assert.equal(reloaded.elements[id].value, '', id + ' must not leak across garments');
   reloaded.elements['export-backup'].fire('click'); await flush();
   const exported = JSON.parse(await reloaded.downloads[0].text());
   const importedRecords = [], imported = await start(importedRecords);
@@ -71,4 +72,26 @@ test('invalid purchase input leaves the existing record and editor intact', asyn
   openRecord(app); app.elements['edit-price'].value = '-5'; app.elements['edit-form'].fire('submit'); await flush();
   assert.equal(app.writes.length, 0); assert.deepEqual(records[0], before); assert.equal(app.elements['edit-dialog'].open, true);
   assert.match(app.errors[0].message, /价格/);
+});
+
+test('brand selections combine with search and category without changing whole-wardrobe value', async () => {
+  const records = [
+    { ...oldGarment('g_1'), brand: 'Réalisation Par', purchasePrice: 100, originalPrice: 290 },
+    { ...oldGarment('g_2'), brand: 'realisation par', category: 'tops', purchasePrice: 35, originalPrice: 200, purchaseCondition: 'secondhand' },
+    { ...oldGarment('g_3'), brand: 'Sézane', purchasePrice: 60, originalPrice: 100 },
+    { ...oldGarment('g_4'), brand: 'Réalisation Par', purchasePrice: 1000, purchaseStatus: 'wishlist' },
+    { ...oldGarment('g_5'), brand: 'Réalisation Par', purchasePrice: 999, demo: true }
+  ];
+  const app = await start(records), el = app.elements;
+  const cards = () => el['garment-grid'].children.filter(c => c.className === 'garment-card');
+  const value = () => el['closet-purchase-total'].children.map(c => c.textContent).join(' ');
+  assert.equal(app.errors.length, 0); assert.equal(value(), '£195.00');
+  assert.equal(el['brand-filter'].children.length, 3);
+  el['brand-filter'].value = 'brand:realisation par'; el['brand-filter'].fire('change');
+  assert.equal(cards().length, 4); assert.match(el['filter-summary'].textContent, /£135.00/); assert.equal(value(), '£195.00');
+  el['category-tabs'].children.find(c => c.textContent === '上装').onclick();
+  assert.equal(cards().length, 1); assert.match(el['filter-summary'].textContent, /£35.00/);
+  el.search.value = 'SEZANE'; el.search.fire('input'); assert.equal(cards().length, 0);
+  el['reset-filters'].fire('click'); assert.equal(cards().length, 5); assert.equal(el['brand-filter'].value, '');
+  assert.equal(value(), '£195.00'); assert.equal(app.writes.length, 0);
 });
