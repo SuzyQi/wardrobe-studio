@@ -13,7 +13,12 @@
     { id: 'unsorted', label: '待整理' }
   ];
   const CAT_IDS = new Set(CATEGORIES.slice(1).map(c => c.id));
-  const BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6'];
+  const BACKGROUNDS = ['#fff1b5', '#c1dbe8', '#43302e'];
+  const LEGACY_BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6'];
+  function normalizeBackground(color) {
+    return [...BACKGROUNDS, ...LEGACY_BACKGROUNDS].includes(color) ? color : BACKGROUNDS[0];
+  }
+  function boardInk(color) { return color === '#43302e' ? '#fff1b5' : '#43302e'; }
   const ID_RE = /^[a-zA-Z0-9_-]{1,100}$/;
   const SAFE_IMAGE = /^data:image\/(png|jpeg|webp|avif);base64,[A-Za-z0-9+/]+={0,2}$/;
   const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
@@ -107,7 +112,7 @@
         return { id: lid, garmentId, x: l.x, y: l.y, w: l.w, rotation: l.rotation, flip: !!l.flip };
       });
       return { id: oid, name: text(o.name) || '未命名搭配', notes: text(o.notes, 1500),
-        background: BACKGROUNDS.includes(o.background) ? o.background : BACKGROUNDS[0],
+        background: normalizeBackground(o.background),
         layers, createdAt: text(o.createdAt, 40), updatedAt: text(o.updatedAt, 40) };
     });
     return { garments, outfits };
@@ -115,6 +120,6 @@
   function removeGarmentReferences(outfits, garmentId) {
     return outfits.map(o => ({ ...o, layers: o.layers.filter(l => l.garmentId !== garmentId) }));
   }
-  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, BACKGROUNDS, clamp, id, categoryLabel, suggestCategory,
+  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
     defaultName, alphaBounds, defaultLayer, positionLayer, validateBackup, removeGarmentReferences };
 });

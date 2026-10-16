@@ -28,7 +28,7 @@
   }
   function toast(message, error = false) {
     clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
-    $('toast').style.background = error ? '#865e54' : ''; toastTimer = setTimeout(() => { $('toast').hidden = true; }, error ? 6500 : 3200);
+    $('toast').style.background = error ? '#5b3b3b' : ''; toastTimer = setTimeout(() => { $('toast').hidden = true; }, error ? 6500 : 3200);
   }
   function report(error) { console.error(error); toast(error?.message || '这次操作没有完成，请重试。', true); }
   function listen(target, event, handler) {
@@ -69,7 +69,7 @@
   }
   function applySnapshot(value) {
     state.layers = value.layers.filter(l => garment(l.garmentId)).map(l => ({ ...l }));
-    state.background = C.BACKGROUNDS.includes(value.background) ? value.background : C.BACKGROUNDS[0];
+    state.background = C.normalizeBackground(value.background);
     state.activeId = state.outfits.some(o => o.id === value.activeId) ? value.activeId : null;
     state.selected = null; $('outfit-name').value = typeof value.name === 'string' ? value.name.slice(0, 100) : '';
     renderBoard(); saveDraft();
@@ -141,6 +141,7 @@
   function renderBoard() {
     const focusId = document.activeElement?.dataset?.layerId;
     $('board-layers').replaceChildren(); $('outfit-board').style.backgroundColor = state.background;
+    $('outfit-board').style.setProperty('--board-ink', C.boardInk(state.background));
     state.layers = state.layers.filter(l => garment(l.garmentId));
     state.layers.forEach((l, index) => {
       const g = garment(l.garmentId), el = node('div', 'board-layer' + (l.id === state.selected ? ' selected' : ''));
@@ -194,6 +195,7 @@
     $('outfit-grid').replaceChildren(); $('outfits-empty').hidden = state.outfits.length > 0;
     for (const o of [...state.outfits].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))) {
       const card = node('article', 'outfit-card'), preview = node('button', 'outfit-preview'); preview.type = 'button'; preview.setAttribute('aria-label', '打开搭配：' + o.name); preview.style.backgroundColor = o.background;
+      preview.style.setProperty('--board-ink', C.boardInk(o.background));
       for (const l of o.layers) {
         const g = garment(l.garmentId); if (!g) continue;
         const img = node('img'); img.src = url(g.thumb); img.alt = ''; img.draggable = false;
@@ -244,7 +246,7 @@
         ctx.save(); ctx.translate(l.x + l.w / 2, l.y + h / 2); ctx.rotate(l.rotation * Math.PI / 180); if (l.flip) ctx.scale(-1, 1);
         ctx.drawImage(img, -l.w / 2, -h / 2, l.w, h); ctx.restore();
       }
-      ctx.fillStyle = '#969f86'; ctx.font = '10px Georgia, serif'; ctx.textAlign = 'center'; ctx.fillText('A LOOK TO LOVE', C.WIDTH / 2, C.HEIGHT - 28);
+      ctx.fillStyle = C.boardInk(o.background); ctx.font = '10px Georgia, serif'; ctx.textAlign = 'center'; ctx.fillText('A LOOK TO LOVE', C.WIDTH / 2, C.HEIGHT - 28);
       I.download(await I.blob(c), safeFilename(o.name) + '.png'); toast('搭配图片已准备好，请查看下载。');
     });
   }
@@ -449,7 +451,7 @@
   categorySelect($('batch-category'), true); categorySelect($('edit-category'));
   C.BACKGROUNDS.forEach((color, i) => {
     const b = node('button', 'swatch'); b.type = 'button'; b.style.backgroundColor = color; b.dataset.color = color;
-    b.setAttribute('aria-label', ['奶油白背景', '纯白背景', '雾粉背景', '浅绿背景'][i]); b.setAttribute('aria-pressed', String(i === 0));
+    b.setAttribute('aria-label', ['奶油黄背景', '粉蓝背景', '深酒红背景'][i]); b.setAttribute('aria-pressed', String(i === 0));
     b.onclick = () => { if (state.background !== color) { pushHistory(); state.background = color; renderBoard(); saveDraft(); } }; $('background-options').append(b);
   });
   listen('file-input', 'change', e => { const files = Array.from(e.target.files || []); e.target.value = ''; return uploadFiles(files); });
