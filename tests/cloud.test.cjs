@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 globalThis.crypto ||= require('node:crypto').webcrypto;
 const Cloud = require('../cloud.js');
 const { fixture } = require('./helpers/github-fixture.cjs');
+const C = require('../core.js');
 const makeClient = api => Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only', fetch: api.fetch, minWriteGap: 0 });
 const garment = (id = 'g_1') => ({ id, name: 'The Simone', category: 'dresses', brand: 'Réalisation Par', purchasePrice: 100, originalPrice: 290, currency: 'GBP',
   aspect: .7, image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumbnail'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }),
@@ -72,7 +73,7 @@ test('simultaneous edits and delete-versus-edit require an explicit per-record c
 test('malformed manifests and corrupted image bytes cannot enter the local wardrobe', async () => {
   const api = fixture(), { result, client } = await publish(api), invalid = structuredClone(result.manifest);
   invalid.garments[0].assets.image.path = '../README.md'; assert.throws(() => Cloud.validateManifest(invalid), /图片记录/);
-  const unsupported = structuredClone(result.manifest); unsupported.version = 2; assert.throws(() => Cloud.validateManifest(unsupported), /不受支持/);
+  const unsupported = structuredClone(result.manifest); unsupported.version = 5; assert.throws(() => Cloud.validateManifest(unsupported), /不受支持/);
   const g = result.manifest.garments[0]; api.corrupt(g.assets.image.sha); await assert.rejects(client.getAsset(g.assets.image, g.id), /校验失败/);
 });
 test('expired authorization is reported without raw server details and disconnect removes access', async () => {
@@ -87,4 +88,24 @@ test('choosing a remote image does not retain a locally edited image under an ol
   const prepared = await client.prepare([cached], []);
   const remoteChosen = Cloud.localRecords(result.manifest, [cached], 'suzyqi/wardrobe-studio-data', prepared)[0];
   assert.equal(remoteChosen.image, undefined); assert.equal(remoteChosen.original, source.original);
+});
+
+test('gallery assets and archive metadata sync across devices, retain verified caches and delete safely', async () => {
+  const api = fixture(), g = garment();
+  g.archive = C.archiveDetails({ year: '2020', relation: 'runway_match', story: 'Found at last', photos: [{ id: 'p_1', kind: 'runway', caption: 'Reference', sourceUrl: 'https://www.zimmermann.com/' }] });
+  g.photo_p_1 = new Blob(['runway photo'], { type: 'image/jpeg' });
+  const { client, result, local } = await publish(api, [g]);
+  assert.equal(result.manifest.version, 2); assert.equal(api.manifest().garments[0].archive.story, g.archive.story);
+  const remote = await client.readRemote(), fresh = Cloud.localRecords(remote.manifest, [], 'suzyqi/wardrobe-studio-data')[0];
+  assert.equal(fresh.photo_p_1, undefined); assert.equal(Object.keys(fresh.cloudAssets).length, 4);
+  const picture = await client.getAsset(fresh.cloudAssets.photo_p_1, fresh.id); assert.equal(await picture.text(), 'runway photo');
+  const cached = Cloud.localRecords(result.manifest, [g], 'suzyqi/wardrobe-studio-data', local)[0]; assert.equal(cached.photo_p_1, g.photo_p_1);
+  const before = api.requests.filter(r => r.method === 'POST').length; await client.prepare([fresh], []);
+  assert.equal(api.requests.filter(r => r.method === 'POST').length, before);
+  const invalid = structuredClone(remote.manifest); delete invalid.garments[0].assets.photo_p_1; assert.throws(() => Cloud.validateManifest(invalid), /图片记录/);
+  const updated = { ...cached, archive: { ...cached.archive, photos: [] } }, prepared = await client.prepare([updated], []);
+  await client.publish(prepared, remote); assert.equal(api.manifest().garments[0].assets.photo_p_1, undefined);
+  const removedPath = result.manifest.garments[0].assets.photo_p_1.path;
+  assert.ok(api.requests.some(r => Array.isArray(r.body?.tree) && r.body.tree.some(entry => entry.path === removedPath && entry.sha === null)));
+  const legacy = structuredClone(api.manifest()); legacy.version = 1; assert.equal(Cloud.validateManifest(legacy).garments.length, 1);
 });

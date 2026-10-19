@@ -5,6 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 const C = require('../core.js');
 const Cloud = require('../cloud.js');
+const Memorial = require('../memorial.js');
 const { fixture } = require('./helpers/github-fixture.cjs');
 globalThis.crypto ||= require('node:crypto').webcrypto;
 const root = path.resolve(__dirname, '..');
@@ -33,16 +34,20 @@ async function start(records, options = {}) {
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
     write: async operations => { for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
-  const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob) };
-  const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
+  const drawings = [];
+  const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob),
+    prepare: async file => { if (file.type !== 'image/png') throw new Error('不支持的图片'); return { image: file }; },
+    canvas: (width, height) => { const lines = [], context = { fillRect() {}, drawImage: (...args) => drawings.push(args), fillText: text => lines.push(text), measureText(text) { return { width: [...text].length * parseInt(this.font) }; } }; return { width, height, lines, getContext: () => context }; },
+    blob: async canvas => new Blob([JSON.stringify({ width: canvas.width, height: canvas.height, text: canvas.lines.join('') })], { type: 'image/png' }) };
+  const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
     sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
     localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener() {} };
   await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, console: { error: error => errors.push(error) },
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => { timers[id - 1] = null; } });
-  return { elements, errors, downloads, writes, memory, session, persistent, runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
+  return { elements, errors, downloads, drawings, writes, memory, session, persistent, runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
-function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'garment-title').onclick(); }
+function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
 
 test('the real edit handlers save, reopen, export and restore every record field without losing images', async () => {
   const records = [oldGarment('g_1'), oldGarment('g_2')], app = await start(records);
@@ -179,4 +184,39 @@ test('a missing cloud manifest preserves local records and the previous sync che
   app.elements['cloud-sync-now'].fire('click'); await until(() => app.errors.length > 0);
   assert.match(app.errors[0].message, /文件缺失/); assert.equal(app.memory.garments.length, 1);
   assert.equal(app.memory.meta.find(g => g.id === 'github-sync').head, checkpoint);
+});
+
+test('the real archive editor saves photos and stories, opens a read-only card, exports PNG and restores all photos', async () => {
+  const records = [oldGarment('g_archive')], app = await start(records), el = app.elements;
+  find(el['garment-grid'].children[0], 'garment-title').onclick();
+  assert.equal(el['archive-dialog'].open, true); assert.equal(el['edit-dialog'].open, undefined);
+  el['archive-edit'].fire('click'); assert.equal(el['archive-dialog'].open, false); assert.equal(el['edit-dialog'].open, true);
+  el['archive-year'].value = '2020'; el['archive-season'].value = 'resort'; el['archive-relation'].value = 'runway_match';
+  el['archive-collection'].value = 'Collection'; el['archive-source'].value = 'https://www.zimmermann.com/'; el['archive-story'].value = '终于找到它\n属于我的纪念';
+  el['edit-brand'].value = 'Zimmermann'; el['edit-price'].value = '1500'; el['edit-currency'].value = 'CNY';
+  el['archive-files'].files = [new Blob(['runway'], { type: 'image/png' })]; el['archive-files'].fire('change');
+  await until(() => el['archive-photo-editors'].children.length === 1 || app.errors.length); assert.deepEqual(app.errors, []);
+  assert.equal(records[0].archive, undefined, 'upload is staged until Save');
+  el['edit-form'].fire('submit'); await flush(); assert.deepEqual(app.errors, []);
+  const saved = records[0], field = 'photo_' + saved.archive.photos[0].id;
+  assert.equal(saved.archive.story, '终于找到它\n属于我的纪念'); assert.ok(saved[field] instanceof Blob);
+  assert.equal(el['archive-dialog'].open, true); assert.equal(el['archive-gallery'].children.length, 2);
+  assert.equal(el['archive-story-text'].textContent, saved.archive.story);
+  el['archive-export'].fire('click'); await until(() => app.downloads.length || app.errors.length); assert.deepEqual(app.errors, []);
+  const card = JSON.parse(await app.downloads[0].text()); assert.equal(card.width, 1200); assert.match(card.text, /终于找到它/); assert.doesNotMatch(card.text, /实付|1,500/); assert.equal(app.drawings.length, 2);
+  el['archive-export-price'].checked = true; el['archive-export'].fire('click'); await until(() => app.downloads.length === 2 || app.errors.length);
+  assert.match(JSON.parse(await app.downloads[1].text()).text, /1,500/);
+  el['export-backup'].fire('click'); await until(() => app.downloads.length === 3 || app.errors.length);
+  const backup = JSON.parse(await app.downloads[2].text()); assert.equal(backup.version, 2); assert.match(backup.garments[0][field], /^data:image\/png;base64,/);
+  const restored = await start([]); restored.elements['restore-input'].files = [{ size: 1000, text: async () => JSON.stringify(backup) }]; restored.elements['restore-input'].fire('change'); await flush();
+  assert.deepEqual(restored.errors, []); assert.deepEqual(restored.memory.garments[0].archive, saved.archive); assert.equal(restored.memory.garments[0][field], backup.garments[0][field]);
+  openRecord(app); const remove = el['archive-photo-editors'].children[0].children[1].children.at(-1); remove.onclick();
+  el['edit-dialog'].close(); assert.equal(records[0].archive.photos.length, 1, 'cancelling removal retains the saved photo');
+});
+test('a failed image batch and unsafe archive source leave the saved garment untouched', async () => {
+  const app = await start([oldGarment('g_1')]); openRecord(app);
+  app.elements['archive-files'].files = [new Blob(['valid'], { type: 'image/png' }), new Blob(['invalid'], { type: 'text/plain' })]; app.elements['archive-files'].fire('change');
+  await until(() => app.errors.length); assert.equal(app.elements['archive-photo-editors'].children.length, 0); assert.equal(app.writes.length, 0);
+  app.elements['archive-source'].value = 'javascript:alert(1)'; app.elements['edit-form'].fire('submit'); await flush();
+  assert.equal(app.writes.length, 0); assert.equal(app.elements['edit-dialog'].open, true); assert.match(app.errors.at(-1).message, /来源/);
 });

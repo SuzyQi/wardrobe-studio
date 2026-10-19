@@ -9,7 +9,8 @@
   const state = { garments: [], outfits: [], layers: [], background: C.BACKGROUNDS[0],
     activeId: null, selected: null, category: 'all', brand: '', favorites: false, query: '', sort: 'newest',
     view: 'closet', history: [], future: [], ready: false };
-  let staged = [], editing = null, processing = false, busy = false, toastTimer, draftTimer;
+  const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
+  let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
   let draftChain = Promise.resolve(), sliderStart = null;
   const Cloud = window.WardrobeCloud, localWrite = DB.write.bind(DB);
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
@@ -85,7 +86,7 @@
     const current = garment(record.id);
     if (current?.cloudOrigin === record.cloudOrigin && current.cloudAssets?.[field]?.sha === reference.sha) {
       current[field] = blob;
-      if (!cloud.applying) {
+      if (!cloud.applying && !busy) {
         cacheWriteChain = cacheWriteChain.catch(() => {}).then(() => localWrite([{ store: 'garments', value: current }]));
         try { await cacheWriteChain; } catch { $('storage-status').textContent = '图片已加载，本机缓存空间不足；云端仍保留图片'; }
       }
@@ -101,7 +102,7 @@
     if (record[field]) { img.src = url(record[field]); return; }
     img.classList.add('cloud-image-pending'); img.title = '连接 GitHub 后加载图片';
     const load = () => ensureAsset(record, field).then(blob => { if (img.isConnected !== false) { img.src = url(blob); img.classList.remove('cloud-image-pending'); img.title = ''; } }).catch(() => { img.alt = '连接 GitHub 加载图片'; });
-    if (imageObserver && field === 'thumb') { observedImages.set(img, load); imageObserver.observe(img); } else load();
+    if (imageObserver && (field === 'thumb' || field.startsWith('photo_'))) { observedImages.set(img, load); imageObserver.observe(img); } else load();
   }
   async function applyCloud(published, prepared, client) {
     cloud.applying = true;
@@ -189,7 +190,7 @@
   function url(blob) { if (!urls.has(blob)) urls.set(blob, URL.createObjectURL(blob)); return urls.get(blob); }
   function cleanupUrls() {
     const used = new Set();
-    for (const g of [...state.garments, ...staged, ...(editing ? [editing] : [])]) for (const k of ['image', 'thumb', 'original']) if (g[k]) used.add(g[k]);
+    for (const g of [...state.garments, ...staged, ...[editing, viewed].filter(Boolean)]) for (const value of Object.values(g)) if (urls.has(value)) used.add(value);
     for (const [blob, value] of urls) if (!used.has(blob)) { URL.revokeObjectURL(value); urls.delete(blob); }
   }
   function node(tag, className, text) {
@@ -309,7 +310,7 @@
       const card = node('article', 'garment-card'); card.dataset.garmentId = g.id;
       const visual = node('div', 'garment-visual');
       const imageButton = node('button', 'garment-image-button'); imageButton.type = 'button';
-      imageButton.setAttribute('aria-label', '把' + g.name + '加入搭配'); imageButton.onclick = () => addLayer(g.id);
+      imageButton.setAttribute('aria-label', '查看藏品档案：' + g.name); imageButton.onclick = () => openArchive(g.id);
       const img = node('img'); img.alt = g.name; img.loading = 'lazy'; img.draggable = false; imageButton.append(img); showAsset(img, g, 'thumb');
       const favorite = action(g.favorite ? '取消收藏' : '收藏单品', 'heart', 'icon-button card-favorite'); favorite.setAttribute('aria-pressed', String(g.favorite));
       favorite.onclick = async () => {
@@ -321,7 +322,7 @@
       const add = action('加入搭配：' + g.name, 'plus', 'card-add'); add.onclick = () => addLayer(g.id);
       visual.append(imageButton, favorite, edit, add); if (g.demo) visual.append(node('span', 'demo-badge', 'DEMO'));
       const heading = node('h3', 'garment-name'), title = node('button', 'garment-title', g.name);
-      title.type = 'button'; title.setAttribute('aria-label', '查看单品档案：' + g.name); title.onclick = () => openEdit(g.id); heading.append(title);
+      title.type = 'button'; title.setAttribute('aria-label', '查看藏品档案：' + g.name); title.onclick = () => openArchive(g.id); heading.append(title);
       card.append(visual, heading);
       if (g.brand) card.append(node('p', 'garment-brand', g.brand));
       const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); card.append(meta);
@@ -512,20 +513,108 @@
     });
   }
   function openEdit(id) {
-    const g = garment(id); if (!g) return; editing = { ...g, ...C.garmentDetails(g) };
+    const g = garment(id); if (!g) return;
+    if ($('archive-dialog').open) $('archive-dialog').close();
+    editing = { ...g, ...C.garmentDetails(g) };
     $('edit-image').removeAttribute('src'); showAsset($('edit-image'), editing, 'image'); $('edit-name').value = g.name;
     $('edit-category').value = g.category;
     for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
+    for (const [field, inputId] of Object.entries(archiveInputs)) $(inputId).value = editing.archive?.[field] ?? (field === 'verification' ? 'pending' : '');
+    renderArchivePhotoEditors();
     $('edit-dialog').showModal();
   }
   async function saveEdit(e) {
     e.preventDefault(); if (!editing) return;
     const details = C.garmentDetails(Object.fromEntries(Object.entries(detailInputs).map(([field, inputId]) => [field, $(inputId).value])));
+    const archive = C.archiveDetails({ ...Object.fromEntries(Object.entries(archiveInputs).map(([field, inputId]) => [field, $(inputId).value])), photos: editing.archive?.photos || [] });
+    const hasArchive = archive.photos.length || ['year', 'season', 'collection', 'look', 'relation', 'story', 'sourceUrl'].some(field => archive[field]);
     await work('正在保存单品…', async () => {
+      await cacheWriteChain.catch(() => {});
       const value = { ...editing, name: $('edit-name').value.trim() || C.defaultName($('edit-category').value, state.garments.findIndex(g => g.id === editing.id) + 1, $('edit-color').value),
         category: $('edit-category').value, ...details, updatedAt: new Date().toISOString() };
+      if (hasArchive) value.archive = archive; else delete value.archive;
       await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g);
-      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); toast('单品已更新。');
+      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); openArchive(value.id); toast('单品已更新。');
+    });
+  }
+  function addArchiveFact(container, label, value) {
+    if (value === undefined || value === null || value === '') return;
+    const pair = node('div'); pair.append(node('dt', '', label), node('dd', '', String(value))); $(container).append(pair);
+  }
+  function appendSource(parent, value) {
+    if (!value) return;
+    const a = node('a', 'archive-source', '查看资料来源 ↗'); a.href = C.sourceUrl(value); a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.append(a);
+  }
+  function openArchive(id) {
+    const g = garment(id); if (!g) return; viewed = g;
+    const a = C.archiveDetails(g.archive) || {};
+    $('archive-brand').textContent = g.brand || 'MY COLLECTION'; $('archive-title').textContent = g.name;
+    $('archive-subtitle').textContent = [a.year, a.season ? C.SEASONS[a.season] : '', a.collection].filter(Boolean).join(' · ') || C.categoryLabel(g.category);
+    $('archive-gallery').replaceChildren(); $('archive-facts').replaceChildren(); $('archive-purchase').replaceChildren(); $('archive-reference').replaceChildren();
+    const photos = [...(a.photos || [])].sort((x, y) => (y.kind === 'runway') - (x.kind === 'runway'));
+    for (const p of [{ field: 'image', label: 'MY PIECE / 我的藏品', caption: '', sourceUrl: '' }, ...photos.map(p => ({ ...p, field: 'photo_' + p.id, label: C.PHOTO_KINDS[p.kind] }))]) {
+      const figure = node('figure', 'archive-photo'), img = node('img'); img.alt = p.label + '：' + g.name; img.loading = 'lazy'; showAsset(img, g, p.field);
+      const caption = node('figcaption'); caption.append(node('strong', '', p.label)); if (p.caption) caption.append(node('p', '', p.caption)); appendSource(caption, p.sourceUrl);
+      figure.append(img, caption); $('archive-gallery').append(figure);
+    }
+    $('archive-gallery').scrollLeft = 0; $('archive-gallery-tip').hidden = !photos.length;
+    for (const [label, value] of [['年份', a.year], ['季节', a.season ? C.SEASONS[a.season] : ''], ['系列名称', a.collection], ['Look 编号', a.look], ['与秀场的关系', a.relation ? C.RELATIONS[a.relation] : '']]) addArchiveFact('archive-facts', label, value);
+    const seriesRecorded = ['year', 'season', 'collection', 'look', 'relation', 'sourceUrl'].some(field => a[field]) || photos.some(p => p.kind === 'runway');
+    if (seriesRecorded) addArchiveFact('archive-facts', '资料状态', a.verification === 'confirmed' ? '已确认' : '待确认');
+    $('archive-unrecorded').hidden = seriesRecorded; appendSource($('archive-reference'), a.sourceUrl);
+    $('archive-story-section').hidden = !a.story; $('archive-story-text').textContent = a.story || '';
+    for (const [label, value] of [['分类', g.subcategory || C.categoryLabel(g.category)], ['尺码', g.size], ['颜色', g.color], ['款式', g.style], ['图案', g.pattern], ['状态', C.PURCHASE_STATUSES[g.purchaseStatus || 'owned']], ['实际购入价', C.formatPrice(g)], ['原价 / 吊牌价', C.formatPrice(g, 'originalPrice')], ['购入日期', g.purchaseDate], ['购买渠道', g.purchaseSource], ['全新 / 二手', g.purchaseCondition ? C.PURCHASE_CONDITIONS[g.purchaseCondition] : ''], ['购入方式', g.purchaseType ? C.PURCHASE_TYPES[g.purchaseType] : '']]) addArchiveFact('archive-purchase', label, value);
+    $('archive-notes').textContent = g.notes || ''; $('archive-export-price').checked = false;
+    if (!$('archive-dialog').open) $('archive-dialog').showModal();
+  }
+  function renderArchivePhotoEditors() {
+    $('archive-photo-editors').replaceChildren();
+    for (const p of editing?.archive?.photos || []) {
+      const row = node('div', 'archive-photo-editor'), img = node('img'); img.alt = C.PHOTO_KINDS[p.kind]; showAsset(img, editing, 'photo_' + p.id); const fields = node('div');
+      const kindLabel = node('label', '', '图片类型'), select = node('select'); select.setAttribute('aria-label', '附图类型');
+      for (const [value, text] of Object.entries(C.PHOTO_KINDS)) { const option = node('option', '', text); option.value = value; select.append(option); }
+      select.value = p.kind; select.addEventListener('change', e => { p.kind = e.target.value; }); kindLabel.append(select); fields.append(kindLabel);
+      for (const [key, label, max] of [['caption', '图片说明', 200], ['sourceUrl', '图片来源链接', 1200]]) {
+        const wrapper = node('label', '', label), input = node('input'); input.type = key === 'sourceUrl' ? 'url' : 'text'; input.maxLength = max; input.value = p[key] || ''; input.setAttribute('aria-label', label);
+        input.addEventListener('input', e => { p[key] = e.target.value; }); wrapper.append(input); fields.append(wrapper);
+      }
+      const remove = node('button', 'text-button danger-text', '移除此附图'); remove.type = 'button'; remove.onclick = () => {
+        editing.archive.photos = editing.archive.photos.filter(x => x.id !== p.id); delete editing['photo_' + p.id]; renderArchivePhotoEditors(); cleanupUrls();
+      };
+      fields.append(remove); row.append(img, fields); $('archive-photo-editors').append(row);
+    }
+  }
+  async function addArchivePhotos(files) {
+    if (!editing || !files.length) return;
+    if ((editing.archive?.photos.length || 0) + files.length > 12) throw new Error('每件藏品最多保存 12 张附图，请减少本次选图数量。');
+    const target = editing;
+    await work('正在整理藏品附图…', async () => {
+      const prepared = [];
+      for (const file of files) { const result = await I.prepare(file); prepared.push({ id: C.id('p'), image: result.image }); }
+      if (editing !== target) return;
+      target.archive ||= C.archiveDetails({});
+      for (const p of prepared) { target.archive.photos.push({ id: p.id, kind: 'runway', caption: '', sourceUrl: '' }); target['photo_' + p.id] = p.image; }
+      renderArchivePhotoEditors(); toast('附图已准备好，点击「保存档案」后保存。');
+    });
+  }
+  async function exportArchive() {
+    if (!viewed) return; const g = garment(viewed.id); if (!g) return;
+    const includePrice = $('archive-export-price').checked;
+    await work('正在制作藏品纪念卡…', async () => {
+      if (document.fonts?.ready) await document.fonts.ready;
+      const measureCanvas = I.canvas(1, 1), measureContext = measureCanvas.getContext('2d');
+      const plan = window.WardrobeMemorial.layout(g, includePrice, (text, font) => { measureContext.font = font; return measureContext.measureText(text).width; });
+      const pictures = [];
+      for (const box of plan.images) pictures.push({ box, image: await I.load(await ensureAsset(g, box.field)) });
+      const canvas = I.canvas(plan.width, plan.height), ctx = canvas.getContext('2d'); ctx.fillStyle = '#f8f7f3'; ctx.fillRect(0, 0, plan.width, plan.height);
+      for (const { box, image } of pictures) {
+        ctx.fillStyle = '#eef0eb'; ctx.fillRect(box.x, box.y, box.w, box.h);
+        const ratio = Math.min((box.w - 36) / image.naturalWidth, (box.h - 36) / image.naturalHeight), width = image.naturalWidth * ratio, height = image.naturalHeight * ratio;
+        ctx.drawImage(image, box.x + (box.w - width) / 2, box.y + (box.h - height) / 2, width, height);
+      }
+      ctx.textBaseline = 'top';
+      for (const op of plan.ops) { ctx.font = op.font; ctx.fillStyle = op.color; ctx.fillText(op.text, op.x, op.y); }
+      I.download(await I.blob(canvas), safeFilename((g.brand ? g.brand + '-' : '') + g.name) + '-藏品纪念卡.png'); toast('纪念卡已准备好，请查看下载或保存到文件。');
     });
   }
   async function deleteGarment() {
@@ -553,9 +642,10 @@
         $('busy-message').textContent = '正在备份衣服 ' + (i + 1) + ' / ' + state.garments.length + '…';
         const g = state.garments[i];
         const { cloudAssets, cloudOrigin, ...portable } = g;
-        garments.push({ ...portable, image: await I.dataUrl(await ensureAsset(g, 'image')), original: await I.dataUrl(await ensureAsset(g, 'original')), thumb: await I.dataUrl(await ensureAsset(g, 'thumb')) });
+        const images = {}; for (const field of C.imageFields(g)) images[field] = await I.dataUrl(await ensureAsset(g, field));
+        garments.push({ ...portable, ...images });
       }
-      const data = { app: 'wardrobe-studio', version: 1, exportedAt: new Date().toISOString(), garments,
+      const data = { app: 'wardrobe-studio', version: 2, exportedAt: new Date().toISOString(), garments,
         outfits: state.outfits.map(o => ({ ...o, layers: o.layers.map(l => ({ ...l })) })) };
       I.download(new Blob([JSON.stringify(data)], { type: 'application/json' }), 'wardrobe-backup-' + new Date().toISOString().slice(0, 10) + '.json');
       toast('备份已准备好，包含 ' + garments.length + ' 件衣服和 ' + state.outfits.length + ' 套已保存搭配。');
@@ -571,9 +661,9 @@
       for (let i = 0; i < parsed.garments.length; i++) {
         const g = parsed.garments[i]; if (existingG.has(g.id)) continue;
         $('busy-message').textContent = '正在检查单品图片 ' + (i + 1) + ' / ' + parsed.garments.length + '…';
-        const decoded = { ...g, image: I.fromDataUrl(g.image), original: I.fromDataUrl(g.original), thumb: I.fromDataUrl(g.thumb) };
+        const decoded = { ...g, ...Object.fromEntries(C.imageFields(g).map(field => [field, I.fromDataUrl(g[field])])) };
         try {
-          for (const field of ['image', 'original', 'thumb']) {
+          for (const field of C.imageFields(g)) {
             const img = await I.load(decoded[field]);
             if (!img.naturalWidth || img.naturalWidth * img.naturalHeight > 60000000) throw new Error('图片尺寸无效');
           }
@@ -662,6 +752,7 @@
   $('upload-dialog').addEventListener('cancel', e => { if (processing) e.preventDefault(); });
   $('upload-dialog').addEventListener('close', () => { staged = []; $('upload-list').replaceChildren(); $('upload-errors').hidden = true; cleanupUrls(); });
   $('edit-dialog').addEventListener('close', () => { editing = null; cleanupUrls(); });
+  $('archive-dialog').addEventListener('close', () => { viewed = null; cleanupUrls(); });
   $('cloud-dialog').addEventListener('close', () => { $('cloud-token').value = ''; });
   for (const b of document.querySelectorAll('[data-upload]')) b.onclick = pickFiles;
   for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => setView(b.dataset.view);
@@ -721,6 +812,11 @@
     const granted = await navigator.storage.persist(); toast(granted ? '已获得本机存储保护，仍建议定期备份。' : '浏览器暂未允许存储保护，请保留导出的备份。');
   });
   listen('edit-form', 'submit', saveEdit); listen('delete-garment', 'click', deleteGarment);
+  listen('archive-edit', 'click', () => { if (viewed) openEdit(viewed.id); });
+  listen('archive-style', 'click', () => { if (!viewed) return; const id = viewed.id; $('archive-dialog').close(); return addLayer(id); });
+  listen('archive-export', 'click', exportArchive);
+  listen('archive-add-photos', 'click', () => { if (editing && !busy) $('archive-files').click(); });
+  listen('archive-files', 'change', e => { const files = Array.from(e.target.files || []); e.target.value = ''; return addArchivePhotos(files); });
   listen('clean-background', 'click', async () => {
     if (!editing) return;
     await work('正在处理浅色背景，请检查衣服边缘…', async () => { await ensureAsset(editing, 'image'); await ensureAsset(editing, 'original'); const image = await I.removeLightBackground(editing); editing = { ...editing, ...image }; $('edit-image').src = url(editing.image); toast('背景处理完成。检查后保存，也可以恢复原图。'); });

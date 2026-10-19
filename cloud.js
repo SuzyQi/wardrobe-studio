@@ -5,13 +5,12 @@
   'use strict';
   const API = 'https://api.github.com';
   const FILE = 'wardrobe.json';
-  const FIELDS = ['image', 'thumb', 'original'];
   const TYPES = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp', 'image/avif': 'avif' };
   const SHA = /^[a-f0-9]{40}$/;
   const HASH = /^[a-f0-9]{64}$/;
   const ID = /^[a-zA-Z0-9_-]{1,100}$/;
   const PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0f8AAAAASUVORK5CYII=';
-  function empty() { return { app: 'wardrobe-studio-cloud', version: 1, updatedAt: '', garments: [], outfits: [] }; }
+  function empty() { return { app: 'wardrobe-studio-cloud', version: 2, updatedAt: '', garments: [], outfits: [] }; }
   function canonical(value) {
     if (Array.isArray(value)) return '[' + value.map(canonical).join(',') + ']';
     if (value && typeof value === 'object') return '{' + Object.keys(value).sort().map(k => JSON.stringify(k) + ':' + canonical(value[k])).join(',') + '}';
@@ -26,10 +25,10 @@
     return { path: asset.path, sha: asset.sha, hash: asset.hash, type: asset.type, size: asset.size };
   }
   function validateManifest(input) {
-    if (!input || input.app !== 'wardrobe-studio-cloud' || input.version !== 1 || !Array.isArray(input.garments) || !Array.isArray(input.outfits)) throw new Error('云端衣橱格式不受支持，尚未更改本机衣橱。');
-    const safe = C.validateBackup({ app: 'wardrobe-studio', version: 1, garments: input.garments.map(g => ({ ...g, image: PLACEHOLDER, original: PLACEHOLDER, thumb: PLACEHOLDER })), outfits: input.outfits });
-    return { app: input.app, version: 1, updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt.slice(0, 40) : '',
-      garments: safe.garments.map((g, index) => ({ ...metadata(g), assets: Object.fromEntries(FIELDS.map(field => [field, validateAsset(input.garments[index].assets?.[field], g.id)])) })), outfits: safe.outfits };
+    if (!input || input.app !== 'wardrobe-studio-cloud' || ![1, 2].includes(input.version) || !Array.isArray(input.garments) || !Array.isArray(input.outfits)) throw new Error('云端衣橱格式不受支持，请刷新网站；尚未更改本机衣橱。');
+    const safe = C.validateBackup({ app: 'wardrobe-studio', version: 2, garments: input.garments.map(g => ({ ...g, ...Object.fromEntries(C.imageFields(g).map(field => [field, PLACEHOLDER])) })), outfits: input.outfits });
+    return { app: input.app, version: 2, updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt.slice(0, 40) : '',
+      garments: safe.garments.map((g, index) => ({ ...metadata(g), assets: Object.fromEntries(C.imageFields(g).map(field => [field, validateAsset(input.garments[index].assets?.[field], g.id)])) })), outfits: safe.outfits };
   }
   function merge(base, local, remote, resolutions = {}) {
     const result = empty(), conflicts = [];
@@ -147,7 +146,7 @@
       const result = empty();
       for (let i = 0; i < garments.length; i++) {
         const g = garments[i]; progress('正在准备照片 ' + (i + 1) + ' / ' + garments.length + '…');
-        const assets = {}; for (const field of FIELDS) assets[field] = await asset(g, field);
+        const assets = {}; for (const field of C.imageFields(g)) assets[field] = await asset(g, field);
         result.garments.push({ ...metadata(g), assets });
       }
       result.outfits = outfits.map(o => ({ ...o, layers: o.layers.map(l => ({ ...l })) }));
@@ -185,7 +184,7 @@
     const prepared = new Map(preparedManifest.garments.map(g => [g.id, g]));
     return manifest.garments.map(g => {
       const old = existing.get(g.id), value = { ...metadata(g), cloudAssets: g.assets, cloudOrigin: origin.toLowerCase() };
-      for (const field of FIELDS) {
+      for (const field of C.imageFields(g)) {
         const known = prepared.get(g.id)?.assets[field] || (old?.cloudOrigin === value.cloudOrigin ? old.cloudAssets?.[field] : null);
         if (old?.[field] && known?.sha === g.assets[field].sha) value[field] = old[field];
       }

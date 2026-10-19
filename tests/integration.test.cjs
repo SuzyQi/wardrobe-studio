@@ -15,7 +15,7 @@ test('every app element reference exists, IDs are unique, and static entrypoints
   assert.match(html, /<dialog id="busy-overlay"/); assert.match(html, /<script src="\.\/demo.js(?:\?[^\"]+)?" defer>/);
 });
 test('optional cloud access is limited to GitHub and source contains no embedded credentials', () => {
-  for (const file of ['index.html', 'app.js', 'cloud.js', 'images.js', 'storage.js', 'demo.js', 'styles.css']) {
+  for (const file of ['index.html', 'app.js', 'cloud.js', 'memorial.js', 'images.js', 'storage.js', 'demo.js', 'styles.css']) {
     const text = fs.readFileSync(path.join(root, file), 'utf8');
     for (const url of text.match(/https?:\/\/[^\s"'<>;]+/g) || []) assert.ok(['www.w3.org', 'api.github.com', 'github.com'].includes(new URL(url).hostname), file + ' contains an unexpected external origin');
     assert.equal(/github_pat_[a-zA-Z0-9_]{20,}|gh[pousr]_[a-zA-Z0-9]{20,}|sk-[a-zA-Z0-9]{20}/.test(text), false, file + ' contains a credential-shaped literal');

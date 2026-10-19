@@ -17,6 +17,35 @@
   const PURCHASE_STATUSES = { owned: '已购入', wishlist: '想买' };
   const PURCHASE_CONDITIONS = { '': '未记录', new: '全新', secondhand: '二手' };
   const PURCHASE_TYPES = { '': '未记录', regular: '原价购买', sale: '折扣购买', sample_sale: 'Sample Sale', gift: '礼物' };
+  const SEASONS = { '': '未记录', spring_summer: '春夏 Spring / Summer', fall_winter: '秋冬 Fall / Winter', resort: 'Resort 度假系列', pre_fall: 'Pre-Fall 早秋', couture: 'Couture 高定', other: '其他系列' };
+  const RELATIONS = { '': '未记录', runway_match: '秀场同款', runway_worn: '秀场实穿', reference: '参考资料' };
+  const PHOTO_KINDS = { runway: '秀场图', detail: '实物细节', worn: '我的穿着', reference: '参考图' };
+  function sourceUrl(value) {
+    const text = typeof value === 'string' ? value.trim() : '';
+    if (!text) return '';
+    let url; try { url = new URL(text); } catch { throw new Error('资料来源请填写完整的 HTTPS 链接。'); }
+    if (text.length > 1200 || url.protocol !== 'https:' || url.username || url.password) throw new Error('资料来源请使用不含密码的 HTTPS 链接。');
+    return url.href;
+  }
+  function archiveDetails(value) {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== 'object' || Array.isArray(value)) throw new Error('藏品档案格式无效。');
+    const text = (key, max) => typeof value[key] === 'string' ? value[key].trim().slice(0, max) : '';
+    const result = { year: text('year', 8), season: text('season', 30), collection: text('collection', 160), look: text('look', 40),
+      relation: text('relation', 30), verification: value.verification || 'pending', story: text('story', 3000), sourceUrl: sourceUrl(value.sourceUrl), photos: [] };
+    if (result.year && (!/^\d{4}$/.test(result.year) || +result.year < 1000 || +result.year > 2200)) throw new Error('系列年份请填写四位年份，或留空待确认。');
+    if (!Object.hasOwn(SEASONS, result.season) || !Object.hasOwn(RELATIONS, result.relation) || !['pending', 'confirmed'].includes(result.verification)) throw new Error('藏品的系列或确认状态无效。');
+    const photos = value.photos ?? [];
+    if (!Array.isArray(photos) || photos.length > 12) throw new Error('每件藏品最多保存 12 张附图。');
+    const seen = new Set();
+    result.photos = photos.map(p => {
+      if (!p || typeof p.id !== 'string' || !/^[a-zA-Z0-9_-]{1,80}$/.test(p.id) || seen.has(p.id) || !Object.hasOwn(PHOTO_KINDS, p.kind)) throw new Error('藏品附图的编号或类型无效。');
+      seen.add(p.id);
+      return { id: p.id, kind: p.kind, caption: typeof p.caption === 'string' ? p.caption.trim().slice(0, 200) : '', sourceUrl: sourceUrl(p.sourceUrl) };
+    });
+    return result;
+  }
+  function imageFields(g) { return ['image', 'thumb', 'original', ...(archiveDetails(g.archive)?.photos || []).map(p => 'photo_' + p.id)]; }
   function optionalPrice(raw, label) {
     if (raw === undefined || raw === null || String(raw).trim() === '') return null;
     if ((typeof raw !== 'number' && typeof raw !== 'string') || !/^\d+(?:\.\d{1,2})?$/.test(String(raw).trim())) throw new Error(label + '请填写非负金额，最多保留两位小数。');
@@ -42,6 +71,7 @@
     const date = source.purchaseDate || '';
     if (typeof date !== 'string' || (date && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number(date.slice(0, 4)) < 1 || Number.isNaN(Date.parse(date + 'T00:00:00Z')) || new Date(date + 'T00:00:00Z').toISOString().slice(0, 10) !== date))) throw new Error('请填写有效的购入日期。');
     details.purchaseDate = date;
+    if (source.archive !== undefined) details.archive = archiveDetails(source.archive);
     return details;
   }
   function formatMoney(amount, currency = 'GBP') {
@@ -82,7 +112,7 @@
         purchaseTotal: g.pricedCount ? g.purchaseCents / 100 : null, originalTotal: g.originalCount ? g.originalCents / 100 : null })) };
   }
   function matchesGarment(garment, query) {
-    return folded([garment.name, garment.brand, garment.color, garment.subcategory, garment.style, garment.pattern, garment.size, garment.purchaseSource, garment.notes, categoryLabel(garment.category)].join(' ')).includes(folded(query));
+    return folded([garment.name, garment.brand, garment.color, garment.subcategory, garment.style, garment.pattern, garment.size, garment.purchaseSource, garment.notes, categoryLabel(garment.category), garment.archive?.year, garment.archive?.collection, garment.archive?.story].join(' ')).includes(folded(query));
   }
   const BACKGROUNDS = ['#f8f7f3', '#edf1f2', '#f3edeb'];
   const LEGACY_BACKGROUNDS = ['#f5f1e9', '#ffffff', '#f1e5e3', '#e8ede6', '#fff1b5', '#c1dbe8', '#43302e'];
@@ -145,7 +175,7 @@
   }
   function validateBackup(input) {
     const fail = message => { throw new Error(message); };
-    if (!input || input.app !== 'wardrobe-studio' || input.version !== 1) fail('这不是受支持的衣橱备份文件。');
+    if (!input || input.app !== 'wardrobe-studio' || ![1, 2].includes(input.version)) fail('这不是受支持的衣橱备份文件，请刷新网站后重试。');
     if (!Array.isArray(input.garments) || !Array.isArray(input.outfits) || input.garments.length > 10000 || input.outfits.length > 5000) fail('备份中的记录格式或数量有误。');
     const seen = new Set();
     function validId(value) { if (typeof value !== 'string' || !ID_RE.test(value)) fail('备份中含有无效编号。'); return value; }
@@ -166,7 +196,8 @@
       return { id: gid, name: text(g.name) || '未命名单品', category: g.category,
         ...garmentDetails(g), favorite: !!g.favorite,
         demo: !!g.demo, aspect, createdAt: text(g.createdAt, 40), updatedAt: text(g.updatedAt, 40),
-        image: image(g.image), original: image(g.original || g.image), thumb: image(g.thumb || g.image) };
+        image: image(g.image), original: image(g.original || g.image), thumb: image(g.thumb || g.image),
+        ...Object.fromEntries(imageFields(g).slice(3).map(field => [field, image(g[field])])) };
     });
     const outfitIds = new Set();
     const outfits = input.outfits.map(o => {
@@ -191,6 +222,6 @@
   function removeGarmentReferences(outfits, garmentId) {
     return outfits.map(o => ({ ...o, layers: o.layers.filter(l => l.garmentId !== garmentId) }));
   }
-  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, PURCHASE_CONDITIONS, PURCHASE_TYPES, garmentDetails, formatMoney, formatPrice, matchesGarment, brandOptions, matchesBrand, wardrobeValue, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
+  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, PURCHASE_CONDITIONS, PURCHASE_TYPES, SEASONS, RELATIONS, PHOTO_KINDS, sourceUrl, archiveDetails, imageFields, garmentDetails, formatMoney, formatPrice, matchesGarment, brandOptions, matchesBrand, wardrobeValue, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
     defaultName, alphaBounds, defaultLayer, positionLayer, validateBackup, removeGarmentReferences };
 });

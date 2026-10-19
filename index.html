@@ -7,14 +7,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261016-device" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261016-device">
-  <script src="./core.js?v=20261016-device" defer></script>
-  <script src="./storage.js?v=20261016-device" defer></script>
-  <script src="./images.js?v=20261016-device" defer></script>
-  <script src="./demo.js?v=20261016-device" defer></script>
-  <script src="./cloud.js?v=20261016-device" defer></script>
-  <script src="./app.js?v=20261016-device" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261019-archive" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261019-archive">
+  <script src="./core.js?v=20261019-archive" defer></script>
+  <script src="./storage.js?v=20261019-archive" defer></script>
+  <script src="./images.js?v=20261019-archive" defer></script>
+  <script src="./demo.js?v=20261019-archive" defer></script>
+  <script src="./cloud.js?v=20261019-archive" defer></script>
+  <script src="./memorial.js?v=20261019-archive" defer></script>
+  <script src="./app.js?v=20261019-archive" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -72,7 +73,7 @@
 </main>
 <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden>
 <input id="restore-input" type="file" accept="application/json,.json" hidden>
-<dialog id="upload-dialog" class="modal upload-modal"><div class="modal-heading"><div><p class="eyebrow">MAKE ROOM FOR YOUR FAVORITES</p><h2>放进衣橱</h2></div><button class="icon-button" data-close="upload-dialog" aria-label="关闭上传窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="muted">名字可以留空，分类以后也能改。保存后点衣服名称或铅笔按钮，补充品牌、尺码和购入记录。</p><div class="batch-category"><label for="batch-category">这一批先放到</label><select id="batch-category"><option value="auto">按文件名建议分类</option></select><span class="subtle">可逐件修改</span></div><p id="upload-progress" class="upload-progress" role="status"></p><div id="upload-errors" class="notice error-notice" hidden></div><div id="upload-list" class="upload-list"></div><div class="modal-footer"><button id="pick-more" class="button secondary"><svg class="icon"><use href="#i-plus"/></svg>继续选图</button><button id="confirm-upload" class="button primary" disabled>保存到衣橱</button></div></dialog>
+<dialog id="upload-dialog" class="modal upload-modal"><div class="modal-heading"><div><p class="eyebrow">MAKE ROOM FOR YOUR FAVORITES</p><h2>放进衣橱</h2></div><button class="icon-button" data-close="upload-dialog" aria-label="关闭上传窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><p class="muted">名字可以留空，分类以后也能改。保存后点图片或名称查看藏品卡，点铅笔补充资料。</p><div class="batch-category"><label for="batch-category">这一批先放到</label><select id="batch-category"><option value="auto">按文件名建议分类</option></select><span class="subtle">可逐件修改</span></div><p id="upload-progress" class="upload-progress" role="status"></p><div id="upload-errors" class="notice error-notice" hidden></div><div id="upload-list" class="upload-list"></div><div class="modal-footer"><button id="pick-more" class="button secondary"><svg class="icon"><use href="#i-plus"/></svg>继续选图</button><button id="confirm-upload" class="button primary" disabled>保存到衣橱</button></div></dialog>
 <dialog id="edit-dialog" class="modal edit-modal" aria-labelledby="edit-title">
   <div class="modal-heading"><div><p class="eyebrow">YOUR GARMENT RECORD</p><h2 id="edit-title">单品档案</h2></div><button class="icon-button" data-close="edit-dialog" aria-label="关闭单品窗口"><svg class="icon"><use href="#i-close"/></svg></button></div>
   <div class="edit-content">
@@ -99,15 +100,36 @@
         <label for="edit-source">购买渠道<input id="edit-source" maxlength="100" placeholder="例如：Vinted、官网、门店"></label>
         <label for="edit-status">购入状态<select id="edit-status"><option value="owned">已购入</option><option value="wishlist">想买</option></select></label>
       </div></fieldset>
-      <label for="edit-notes">备注<textarea id="edit-notes" maxlength="1500" rows="3" placeholder="购买渠道、面料，或喜欢它的理由…"></textarea></label>
+      <fieldset class="record-group archive-edit-group"><legend>秀款资料 · 可留空</legend><div class="record-fields">
+        <label for="archive-year">系列年份<input id="archive-year" inputmode="numeric" maxlength="4" placeholder="例如 2020"></label>
+        <label for="archive-season">季节 / 系列<select id="archive-season"><option value="">未记录</option><option value="spring_summer">春夏 Spring / Summer</option><option value="fall_winter">秋冬 Fall / Winter</option><option value="resort">Resort 度假系列</option><option value="pre_fall">Pre-Fall 早秋</option><option value="couture">Couture 高定</option><option value="other">其他系列</option></select></label>
+        <label class="field-wide" for="archive-collection">系列名称<input id="archive-collection" maxlength="160" placeholder="品牌发布的系列名称"></label>
+        <label for="archive-look">Look 编号<input id="archive-look" maxlength="40" placeholder="例如 24"></label>
+        <label for="archive-relation">藏品与秀场的关系<select id="archive-relation"><option value="">未记录</option><option value="runway_match">秀场同款</option><option value="runway_worn">秀场实穿</option><option value="reference">参考资料</option></select></label>
+        <label for="archive-verification">资料确认状态<select id="archive-verification"><option value="pending">待确认</option><option value="confirmed">已确认</option></select></label>
+        <label class="field-wide" for="archive-source">系列资料来源<input id="archive-source" type="url" maxlength="1200" placeholder="粘贴完整的 HTTPS 网址"></label>
+      </div><p class="record-note">「秀场同款」用于相同设计的零售款；「秀场实穿」用于有来源证明的模特实穿样衣。未知资料可以留空。</p></fieldset>
+      <label for="archive-story">我的收藏故事<textarea id="archive-story" maxlength="3000" rows="5" placeholder="第一次看到它的时候，寻找它的过程，或一次特别的穿着回忆…"></textarea></label>
+      <fieldset class="record-group"><legend>藏品相册</legend><p class="record-note">秀场、实物细节、穿着与参考图分别标注。最多 12 张，每张不超过 25 MB。</p><input id="archive-files" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden><button id="archive-add-photos" type="button" class="button secondary small">＋ 添加秀场图 / 附图</button><div id="archive-photo-editors" class="archive-photo-editors"></div><p class="record-note">附图与资料在点击「保存档案」后保存；关闭编辑窗口可放弃本次修改。</p></fieldset>
+      <label for="edit-notes">备注<textarea id="edit-notes" maxlength="1500" rows="3" placeholder="面料、保养或其他记录…"></textarea></label>
       <button type="submit" class="button primary full-width">保存档案</button>
     </form>
   </div>
   <div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div>
 </dialog>
 <datalist id="brand-suggestions"></datalist>
+<dialog id="archive-dialog" class="modal archive-modal" aria-labelledby="archive-title">
+  <div class="archive-top"><p class="eyebrow">WARDROBE STUDIO / PERSONAL COLLECTION</p><button class="icon-button" data-close="archive-dialog" aria-label="关闭藏品档案"><svg class="icon"><use href="#i-close"/></svg></button></div>
+  <header class="archive-heading"><p id="archive-brand" class="archive-brand"></p><h2 id="archive-title"></h2><p id="archive-subtitle" class="subtle"></p></header>
+  <div id="archive-gallery" class="archive-gallery" aria-label="实物与秀场相册"></div><p id="archive-gallery-tip" class="archive-gallery-tip">左右滑动查看实物与秀场附图</p>
+  <div class="archive-body"><section class="archive-section"><p class="eyebrow">THE COLLECTION</p><h3>秀款资料</h3><dl id="archive-facts" class="archive-facts"></dl><p id="archive-unrecorded" class="muted">还没有系列资料。可在「编辑档案」中补充秀场图、年份与来源。</p><div id="archive-reference"></div></section>
+    <section id="archive-story-section" class="archive-section"><p class="eyebrow">A STORY TO KEEP</p><h3>我的收藏故事</h3><p id="archive-story-text" class="archive-story"></p></section>
+    <section class="archive-section"><p class="eyebrow">IN MY WARDROBE</p><h3>购入与单品记录</h3><dl id="archive-purchase" class="archive-facts"></dl><p id="archive-notes" class="archive-story"></p></section>
+    <footer class="archive-footer"><label class="cloud-check"><input id="archive-export-price" type="checkbox">纪念卡显示购入价格</label><p class="fine-print">纪念卡呈现主图与第一张秀场图（或附图），并保留收藏故事和来源。</p><div class="archive-actions"><button id="archive-edit" class="button secondary">编辑档案</button><button id="archive-export" class="button primary">导出 PNG 纪念卡</button><button id="archive-style" class="text-button">＋ 加入搭配</button></div></footer>
+  </div>
+</dialog>
 <dialog id="backup-dialog" class="modal backup-modal"><div class="modal-heading"><div><p class="eyebrow">KEEP YOUR FAVORITES SAFE</p><h2>把衣橱好好留住</h2></div><button class="icon-button" data-close="backup-dialog" aria-label="关闭备份窗口"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="notice"><strong>本机保存与 GitHub 同步可一起使用。</strong><p>连接 GitHub 后，照片、单品档案和已保存搭配可同步至私有仓库。完整备份也能用于换设备和恢复本机记录。</p></div><button class="backup-option" id="export-backup"><span class="option-icon"><svg class="icon"><use href="#i-download"/></svg></span><span><strong>导出整个衣橱</strong><small>包含原图、完整单品档案和已保存的搭配</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="backup-option" id="import-backup"><span class="option-icon"><svg class="icon"><use href="#i-upload"/></svg></span><span><strong>从备份恢复</strong><small>合并导入，保留已有记录；不会重复添加同一编号</small></span><svg class="icon"><use href="#i-arrow"/></svg></button><button class="text-button" id="persistent-storage">尝试保留本机存储</button><p class="fine-print">本机存储保护不能代替备份。使用 GitHub 同步时，请确认状态显示“已同步”；离线或尚未连接时，新修改先保存在本机。</p></dialog>
-<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服名称或右上角铅笔，记录品牌、配色、细分类、款式、图案、尺码、原价、实际购入价、全新或二手、购入方式、购买渠道、日期和购入状态；留空也能保存。完整档案会随备份一起保留；连接 GitHub 后也会一起同步。</p></li><li><strong>查看衣橱价值与品牌</strong><p>衣橱顶部汇总已购入单品的实际花费与原价，并显示未填价格的数量。不同币种分开统计，想买和示例衣服不计入。用品牌下拉框筛选，或直接搜索品牌名。</p></li><li><strong>连接私有 GitHub 衣橱</strong><p>点右上角 GitHub 同步，连接独立的私有数据仓库。开启自动同步后，新照片、单品修改和已保存的搭配会同步；未保存的画布草稿保存在本机。换设备后连接同一仓库即可加载。遇到冲突时选择保留的版本。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
+<dialog id="help-dialog" class="modal help-modal"><div class="modal-heading"><h2>在衣橱间，慢慢来</h2><button class="icon-button" data-close="help-dialog" aria-label="关闭使用小贴士"><svg class="icon"><use href="#i-close"/></svg></button></div><ol class="help-list"><li><strong>一次上传多件</strong><p>可批量选图，名字选填。文件名有“半裙”“dress”等词时会建议分类，普通相机文件名会先放到“待整理”。</p></li><li><strong>用干净的单品图</strong><p>透明 PNG、平铺图或白底图更适合拼搭。透明图片会裁掉空白；真人照片会保留人物。</p></li><li><strong>自由搭一搭</strong><p>点单品的 ＋ 加入画布。拖动位置，用右下角圆点缩放，也可在下方调整大小、旋转、翻转和层次。</p></li><li><strong>补充单品档案</strong><p>点击衣服图片或名称查看藏品档案，再点「编辑档案」或右上角铅笔，补充单品与购入信息、秀款年份、系列、Look 编号、资料来源和收藏故事。可添加最多 12 张秀场、实物细节或穿着附图，并导出 PNG 纪念卡；价格可选择隐藏。所有资料均可留空。完整档案会随备份一起保留；连接 GitHub 后也会一起同步。</p></li><li><strong>查看衣橱价值与品牌</strong><p>衣橱顶部汇总已购入单品的实际花费与原价，并显示未填价格的数量。不同币种分开统计，想买和示例衣服不计入。用品牌下拉框筛选，或直接搜索品牌名。</p></li><li><strong>连接私有 GitHub 衣橱</strong><p>点右上角 GitHub 同步，连接独立的私有数据仓库。开启自动同步后，新照片、单品修改和已保存的搭配会同步；未保存的画布草稿保存在本机。换设备后连接同一仓库即可加载。遇到冲突时选择保留的版本。</p></li><li><strong>保存喜欢，记得备份</strong><p>搭配保存后可重新打开。导出图片用于分享；完整备份用于换设备或恢复衣橱。</p></li></ol><div class="help-actions"><button id="help-demo" class="button secondary">添加示例衣服试一试</button><button id="remove-demo" class="text-button danger-text" hidden>移除示例衣服</button></div></dialog>
 <dialog id="cloud-dialog" class="modal cloud-modal" aria-labelledby="cloud-title">
   <div class="modal-heading"><div><p class="eyebrow">YOUR PRIVATE WARDROBE</p><h2 id="cloud-title">GitHub 同步</h2></div><button class="icon-button" data-close="cloud-dialog" aria-label="关闭 GitHub 同步"><svg class="icon"><use href="#i-close"/></svg></button></div>
   <div class="cloud-status-box"><p id="cloud-status" role="status">尚未连接 GitHub</p><span id="cloud-repository">SuzyQi/wardrobe-studio-data</span><small id="cloud-last-sync">同步照片、单品档案和已保存的搭配。</small></div>
