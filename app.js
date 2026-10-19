@@ -49,6 +49,12 @@
     $('cloud-disconnect').hidden = !cloud.client;
     $('cloud-button-label').textContent = cloud.client ? (cloud.saved.dirty ? '待同步' : '已同步') : 'GitHub 同步';
     $('cloud-last-sync').textContent = cloud.saved.lastSyncAt ? '上次同步：' + new Date(cloud.saved.lastSyncAt).toLocaleString('zh-CN') : '同步照片、单品档案和已保存的搭配。';
+    $('archive-sync-status').textContent = !cloud.client ? '已保存到本机 · 连接 GitHub 后可同步到其他设备'
+      : cloud.conflict ? '本机已保存 · 存在同步冲突，请在 GitHub 同步窗口处理'
+      : cloud.message.startsWith('正在同步') ? '本机已保存 · 正在同步至 GitHub…'
+      : cloud.message.includes('未完成') ? '同步未完成 · 本机记录保留，请在 GitHub 同步窗口重试'
+      : cloud.saved.dirty ? (cloud.auto ? '本机已保存 · 等待自动同步至 GitHub' : '本机已保存 · 自动同步已关闭，请手动同步')
+      : '已同步至 GitHub · 其他设备连接后可查看';
     if (state.ready) updateStorageStatus();
   }
   const authorizationStores = [['device', 'localStorage', 'wardrobe-github-device'], ['session', 'sessionStorage', 'wardrobe-github-session']];
@@ -76,7 +82,7 @@
     clearTimeout(cloud.timer);
     if (!cloud.client || !cloud.auto || !cloud.saved.dirty || cloud.conflict) return;
     cloud.timer = setTimeout(() => {
-      if (busy || document.querySelector('dialog[open]')) return scheduleCloud();
+      if (busy || document.querySelector('dialog[open]:not(#archive-dialog)')) return scheduleCloud();
       syncCloud().catch(report);
     }, 3000);
   }
@@ -161,6 +167,7 @@
     if (!outfitIds.has(state.activeId)) state.activeId = null;
     state.history = []; state.future = []; cloud.saved = checkpoint; cloud.conflict = null;
     renderCloset(); renderBoard(); renderOutfits();
+    refreshViewedArchive();
   }
   function showConflicts(conflicts) {
     $('cloud-conflict-list').replaceChildren();
@@ -620,7 +627,14 @@
     $('archive-story-section').hidden = !a.story; $('archive-story-text').textContent = a.story || '';
     for (const [label, value] of [['分类', g.subcategory || C.categoryLabel(g.category)], ['尺码', g.size], ['颜色', g.color], ['款式', g.style], ['图案', g.pattern], ['状态', C.PURCHASE_STATUSES[g.purchaseStatus || 'owned']], ['实际购入价', C.formatPrice(g)], ['原价 / 吊牌价', C.formatPrice(g, 'originalPrice')], ['购入日期', g.purchaseDate], ['购买渠道', g.purchaseSource], ['全新 / 二手', g.purchaseCondition ? C.PURCHASE_CONDITIONS[g.purchaseCondition] : ''], ['购入方式', g.purchaseType ? C.PURCHASE_TYPES[g.purchaseType] : '']]) addArchiveFact('archive-purchase', label, value);
     $('archive-notes').textContent = g.notes || ''; $('archive-export-price').checked = false;
+    renderCloudStatus();
     if (!$('archive-dialog').open) $('archive-dialog').showModal();
+  }
+  function refreshViewedArchive() {
+    if (!viewed || !$('archive-dialog').open) return;
+    const id = viewed.id, price = $('archive-export-price').checked, position = $('archive-gallery').scrollLeft;
+    if (!garment(id)) { $('archive-dialog').close(); return; }
+    openArchive(id); $('archive-export-price').checked = price; $('archive-gallery').scrollLeft = position;
   }
   function renderArchivePhotoEditors() {
     $('archive-photo-editors').replaceChildren();
@@ -904,7 +918,7 @@
   function restorePageImages() {
     if (!state.ready) return;
     renderCloset(); renderBoard(); renderOutfits();
-    if (viewed) { const id = viewed.id, price = $('archive-export-price').checked; openArchive(id); $('archive-export-price').checked = price; }
+    refreshViewedArchive();
     if (editing) showAsset($('edit-image'), editing, 'image');
   }
   // A hidden page can remain alive in Safari's page cache. Keep its image URLs valid;

@@ -7,15 +7,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261019-storage-retry" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261019-storage-retry">
-  <script src="./core.js?v=20261019-storage-retry" defer></script>
-  <script src="./storage.js?v=20261019-storage-retry" defer></script>
-  <script src="./images.js?v=20261019-storage-retry" defer></script>
-  <script src="./demo.js?v=20261019-storage-retry" defer></script>
-  <script src="./cloud.js?v=20261019-storage-retry" defer></script>
-  <script src="./memorial.js?v=20261019-storage-retry" defer></script>
-  <script src="./app.js?v=20261019-storage-retry" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261020-archive-sync" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261020-archive-sync">
+  <script src="./core.js?v=20261020-archive-sync" defer></script>
+  <script src="./storage.js?v=20261020-archive-sync" defer></script>
+  <script src="./images.js?v=20261020-archive-sync" defer></script>
+  <script src="./demo.js?v=20261020-archive-sync" defer></script>
+  <script src="./cloud.js?v=20261020-archive-sync" defer></script>
+  <script src="./memorial.js?v=20261020-archive-sync" defer></script>
+  <script src="./app.js?v=20261020-archive-sync" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -121,7 +121,7 @@
 <datalist id="brand-suggestions"></datalist>
 <dialog id="archive-dialog" class="modal archive-modal" aria-labelledby="archive-title">
   <div class="archive-top"><p class="eyebrow">WARDROBE STUDIO / PERSONAL COLLECTION</p><button class="icon-button" data-close="archive-dialog" aria-label="关闭藏品档案"><svg class="icon"><use href="#i-close"/></svg></button></div>
-  <header class="archive-heading"><p id="archive-brand" class="archive-brand"></p><h2 id="archive-title"></h2><p id="archive-subtitle" class="subtle"></p></header>
+  <header class="archive-heading"><p id="archive-brand" class="archive-brand"></p><h2 id="archive-title"></h2><p id="archive-subtitle" class="subtle"></p><p id="archive-sync-status" class="subtle" role="status"></p></header>
   <div id="archive-gallery" class="archive-gallery" aria-label="实物与秀场相册"></div><p id="archive-gallery-tip" class="archive-gallery-tip">左右滑动查看实物与秀场附图</p>
   <div class="archive-body"><section class="archive-section"><p class="eyebrow">THE COLLECTION</p><h3>秀款资料</h3><dl id="archive-facts" class="archive-facts"></dl><p id="archive-unrecorded" class="muted">还没有系列资料。可在「编辑档案」中补充秀场图、年份与来源。</p><div id="archive-reference"></div></section>
     <section id="archive-story-section" class="archive-section"><p class="eyebrow">A STORY TO KEEP</p><h3>我的收藏故事</h3><p id="archive-story-text" class="archive-story"></p></section>

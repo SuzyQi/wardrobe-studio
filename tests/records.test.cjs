@@ -34,7 +34,9 @@ async function start(records, options = {}) {
   const errors = [], downloads = [], writes = [], timers = [], memory = { garments: records, outfits: options.outfits || [], meta: options.meta || [] }, session = options.session || new Map(), persistent = options.persistent || new Map();
   const windowEvents = {}, documentEvents = {}, objectUrls = [], revokedUrls = [];
   const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; }, visibilityState: 'visible',
-    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
+    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [],
+    querySelector: selector => selector.startsWith('dialog[open]') ? Object.entries(elements).find(([id, el]) => el.open && !(selector.includes(':not(#archive-dialog)') && id === 'archive-dialog'))?.[1] || null : null,
+    addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
     write: async operations => { if (options.failWrites > 0) { options.failWrites--; throw new Error('本机存储空间不足，请导出备份后重试。'); }
       if (options.rejectWrite?.(operations)) throw Object.assign(new Error('Error preparing Blob/File data'), { name: 'UnknownError' });
@@ -51,7 +53,8 @@ async function start(records, options = {}) {
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => { timers[id - 1] = null; } });
   return { elements, errors, downloads, drawings, writes, memory, session, persistent, objectUrls, revokedUrls,
     fireWindow: (type, event = {}) => { for (const fn of windowEvents[type] || []) fn(event); }, fireDocument: type => { for (const fn of documentEvents[type] || []) fn({}); },
-    runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
+    runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); },
+    runSyncTimer: () => { const index = timers.findIndex(timer => timer?.delay === 3000); if (index < 0) return false; const timer = timers[index]; timers[index] = null; timer.fn(); return true; } };
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
@@ -317,4 +320,40 @@ test('if the retry also fails, neither the archive nor checkpoint is reported sa
   assert.equal(app.memory.meta.find(m => m.id === 'github-sync').dirty, false); assert.equal(el['edit-error'].hidden, false);
   options.rejectWrite = null; el['edit-form'].fire('submit'); await until(() => el['edit-dialog'].open === false);
   const saved = app.memory.garments[0]; assert.equal(saved.archive.story, '待恢复故事'); assert.equal(await saved['photo_' + saved.archive.photos[0].id].text(), 'unsynced photo');
+});
+test('saving auto-syncs while the read-only archive stays open, and the card shows completion', async () => {
+  const api = fixture(), app = await start([{ ...oldGarment('g_auto'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  await connect(app); openRecord(app); app.elements['archive-story'].value = '保存后自动同步';
+  app.elements['edit-form'].fire('submit'); await until(() => app.elements['edit-dialog'].open === false);
+  assert.equal(app.elements['archive-dialog'].open, true); assert.match(app.elements['archive-sync-status'].textContent, /等待自动同步/);
+  app.elements['archive-export-price'].checked = true; app.elements['archive-gallery'].scrollLeft = 80;
+  assert.equal(app.runSyncTimer(), true);
+  await until(() => api.manifest().garments[0].archive?.story === '保存后自动同步');
+  await until(() => app.elements['cloud-button-label'].textContent === '已同步');
+  assert.equal(app.elements['archive-dialog'].open, true); assert.match(app.elements['archive-sync-status'].textContent, /已同步/);
+  assert.equal(app.elements['archive-export-price'].checked, true); assert.equal(app.elements['archive-gallery'].scrollLeft, 80); assert.deepEqual(app.errors, []);
+});
+test('auto-sync waits for active editing and does not include changes the user has not saved', async () => {
+  const api = fixture(), app = await start([{ ...oldGarment('g_draft'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  await connect(app); openRecord(app); app.elements['archive-story'].value = '已保存的故事'; app.elements['edit-form'].fire('submit');
+  await until(() => app.elements['edit-dialog'].open === false); openRecord(app); app.elements['archive-story'].value = '尚未保存的改动';
+  assert.equal(app.runSyncTimer(), true); await flush();
+  assert.equal(api.manifest().garments[0].archive, undefined); assert.equal(app.elements['archive-story'].value, '尚未保存的改动');
+  app.elements['edit-dialog'].close(); assert.equal(app.runSyncTimer(), true);
+  await until(() => app.elements['cloud-button-label'].textContent === '已同步'); assert.equal(api.manifest().garments[0].archive.story, '已保存的故事'); assert.deepEqual(app.errors, []);
+});
+test('an archive stays saved locally and shows a retry message when automatic network sync fails', async () => {
+  const api = fixture(), app = await start([{ ...oldGarment('g_offline'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  await connect(app); openRecord(app); app.elements['archive-story'].value = '网络失败也保留'; app.elements['edit-form'].fire('submit');
+  await until(() => app.elements['edit-dialog'].open === false); api.failNext(503); app.runSyncTimer(); await until(() => app.errors.length);
+  assert.equal(app.elements['archive-dialog'].open, true); assert.match(app.elements['archive-sync-status'].textContent, /同步未完成/);
+  assert.equal(app.memory.garments[0].archive.story, '网络失败也保留'); assert.equal(app.memory.meta.find(m => m.id === 'github-sync').dirty, true);
+  assert.equal(api.manifest().garments[0].archive, undefined);
+});
+test('the archive respects disabled auto-sync and explains that manual sync is required', async () => {
+  const api = fixture(), app = await start([{ ...oldGarment('g_manual'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  await connect(app); app.elements['cloud-auto'].checked = false; app.elements['cloud-auto'].fire('change'); await flush();
+  openRecord(app); app.elements['archive-story'].value = '手动同步'; app.elements['edit-form'].fire('submit'); await until(() => app.elements['edit-dialog'].open === false);
+  assert.equal(app.runSyncTimer(), false); assert.match(app.elements['archive-sync-status'].textContent, /自动同步已关闭/); assert.equal(api.manifest().garments[0].archive, undefined);
+  assert.equal(app.memory.garments[0].archive.story, '手动同步'); assert.deepEqual(app.errors, []);
 });
