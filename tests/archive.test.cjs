@@ -20,6 +20,14 @@ test('unsafe sources, malformed photos, missing payloads and excessive galleries
   const g = record(); delete g.photo_p_runway;
   assert.throws(() => C.validateBackup({ app: 'wardrobe-studio', version: 2, garments: [g], outfits: [] }), /图片/);
 });
+test('provenance accepts plain notes and normalizes scheme-less web addresses safely', () => {
+  assert.equal(C.sourceUrl('Vogue Runway / 卖家提供'), 'Vogue Runway / 卖家提供');
+  assert.equal(C.sourceUrl('www.zimmermann.com/'), 'https://www.zimmermann.com/');
+  assert.equal(C.sourceUrl('//www.zimmermann.com/'), 'https://www.zimmermann.com/');
+  const value = archive(); value.sourceUrl = '官网资料，年份待核对'; value.photos[0].sourceUrl = '卖家提供';
+  const restored = C.validateBackup({ app: 'wardrobe-studio', version: 2, garments: [{ ...record(), archive: value }], outfits: [] }).garments[0];
+  assert.equal(restored.archive.sourceUrl, value.sourceUrl); assert.equal(restored.archive.photos[0].sourceUrl, '卖家提供');
+});
 test('memorial card selects runway photo, hides prices by default and wraps long text without clipping', () => {
   const g = record(); g.archive.photos.unshift({ id: 'p_detail', kind: 'detail', caption: '', sourceUrl: '' });
   g.archive.story = '回忆'.repeat(1500); g.archive.photos[1].caption = '秀场说明'.repeat(40);

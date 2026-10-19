@@ -7,15 +7,15 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://api.github.com; img-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <meta name="description" content="一个属于自己的衣橱间。上传喜欢的衣服，自由搭配，留住每一天的穿衣灵感。">
   <title>衣橱间 · Wardrobe Studio</title>
-  <link rel="icon" href="./favicon.svg?v=20261019-mobile-images" type="image/svg+xml">
-  <link rel="stylesheet" href="./styles.css?v=20261019-mobile-images">
-  <script src="./core.js?v=20261019-mobile-images" defer></script>
-  <script src="./storage.js?v=20261019-mobile-images" defer></script>
-  <script src="./images.js?v=20261019-mobile-images" defer></script>
-  <script src="./demo.js?v=20261019-mobile-images" defer></script>
-  <script src="./cloud.js?v=20261019-mobile-images" defer></script>
-  <script src="./memorial.js?v=20261019-mobile-images" defer></script>
-  <script src="./app.js?v=20261019-mobile-images" defer></script>
+  <link rel="icon" href="./favicon.svg?v=20261019-save-record" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css?v=20261019-save-record">
+  <script src="./core.js?v=20261019-save-record" defer></script>
+  <script src="./storage.js?v=20261019-save-record" defer></script>
+  <script src="./images.js?v=20261019-save-record" defer></script>
+  <script src="./demo.js?v=20261019-save-record" defer></script>
+  <script src="./cloud.js?v=20261019-save-record" defer></script>
+  <script src="./memorial.js?v=20261019-save-record" defer></script>
+  <script src="./app.js?v=20261019-save-record" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -78,7 +78,7 @@
   <div class="modal-heading"><div><p class="eyebrow">YOUR GARMENT RECORD</p><h2 id="edit-title">单品档案</h2></div><button class="icon-button" data-close="edit-dialog" aria-label="关闭单品窗口"><svg class="icon"><use href="#i-close"/></svg></button></div>
   <div class="edit-content">
     <div class="edit-image-column"><div class="edit-preview"><img id="edit-image" alt="单品预览"></div><div class="image-tools"><button class="button small secondary" id="clean-background">去除浅色背景</button><button class="text-button" id="restore-original">恢复原图</button></div><p class="fine-print">浅色背景处理适合白底单品图，可能影响白色衣服。保存前请检查；原图会保留。</p></div>
-    <form id="edit-form">
+    <form id="edit-form" novalidate>
       <p class="record-hint">以下内容均可选填，随时补充。</p>
       <fieldset class="record-group"><legend>基本信息</legend><div class="record-fields">
         <label for="edit-name">名称<input id="edit-name" maxlength="100" placeholder="例如：The Simone"></label>
@@ -107,12 +107,13 @@
         <label for="archive-look">Look 编号<input id="archive-look" maxlength="40" placeholder="例如 24"></label>
         <label for="archive-relation">藏品与秀场的关系<select id="archive-relation"><option value="">未记录</option><option value="runway_match">秀场同款</option><option value="runway_worn">秀场实穿</option><option value="reference">参考资料</option></select></label>
         <label for="archive-verification">资料确认状态<select id="archive-verification"><option value="pending">待确认</option><option value="confirmed">已确认</option></select></label>
-        <label class="field-wide" for="archive-source">系列资料来源<input id="archive-source" type="url" maxlength="1200" placeholder="粘贴完整的 HTTPS 网址"></label>
+        <label class="field-wide" for="archive-source">系列资料来源（网址或说明）<input id="archive-source" type="text" maxlength="1200" autocapitalize="off" placeholder="例如 Vogue Runway，或粘贴来源网址"></label>
       </div><p class="record-note">「秀场同款」用于相同设计的零售款；「秀场实穿」用于有来源证明的模特实穿样衣。未知资料可以留空。</p></fieldset>
       <label for="archive-story">我的收藏故事<textarea id="archive-story" maxlength="3000" rows="5" placeholder="第一次看到它的时候，寻找它的过程，或一次特别的穿着回忆…"></textarea></label>
       <fieldset class="record-group"><legend>藏品相册</legend><p class="record-note">秀场、实物细节、穿着与参考图分别标注。最多 12 张，每张不超过 25 MB。</p><input id="archive-files" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden><button id="archive-add-photos" type="button" class="button secondary small">＋ 添加秀场图 / 附图</button><div id="archive-photo-editors" class="archive-photo-editors"></div><p class="record-note">附图与资料在点击「保存档案」后保存；关闭编辑窗口可放弃本次修改。</p></fieldset>
       <label for="edit-notes">备注<textarea id="edit-notes" maxlength="1500" rows="3" placeholder="面料、保养或其他记录…"></textarea></label>
-      <button type="submit" class="button primary full-width">保存档案</button>
+      <div id="edit-error" class="notice error-notice" role="alert" hidden></div>
+      <button id="edit-save" type="submit" class="button primary full-width">保存档案</button>
     </form>
   </div>
   <div class="edit-bottom"><button class="text-button danger-text" id="delete-garment"><svg class="icon"><use href="#i-trash"/></svg>删除这件衣服</button><button class="text-button" id="download-original">下载原图 <svg class="icon"><use href="#i-download"/></svg></button></div>

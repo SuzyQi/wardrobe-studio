@@ -537,6 +537,7 @@
     const g = garment(id); if (!g) return;
     if ($('archive-dialog').open) $('archive-dialog').close();
     editing = { ...g, ...C.garmentDetails(g) };
+    $('edit-error').hidden = true; $('edit-error').textContent = '';
     $('edit-image').removeAttribute('src'); showAsset($('edit-image'), editing, 'image'); $('edit-name').value = g.name;
     $('edit-category').value = g.category;
     for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
@@ -546,17 +547,31 @@
   }
   async function saveEdit(e) {
     e.preventDefault(); if (!editing) return;
-    const details = C.garmentDetails(Object.fromEntries(Object.entries(detailInputs).map(([field, inputId]) => [field, $(inputId).value])));
-    const archive = C.archiveDetails({ ...Object.fromEntries(Object.entries(archiveInputs).map(([field, inputId]) => [field, $(inputId).value])), photos: editing.archive?.photos || [] });
-    const hasArchive = archive.photos.length || ['year', 'season', 'collection', 'look', 'relation', 'story', 'sourceUrl'].some(field => archive[field]);
-    await work('正在保存单品…', async () => {
-      await cacheWriteChain.catch(() => {});
-      const value = { ...editing, name: $('edit-name').value.trim() || C.defaultName($('edit-category').value, state.garments.findIndex(g => g.id === editing.id) + 1, $('edit-color').value),
-        category: $('edit-category').value, ...details, updatedAt: new Date().toISOString() };
-      if (hasArchive) value.archive = archive; else delete value.archive;
-      await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g);
-      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); openArchive(value.id); toast('单品已更新。');
-    });
+    const button = $('edit-save'), errorBox = $('edit-error');
+    errorBox.hidden = true; errorBox.textContent = '';
+    try {
+      if (busy) throw new Error('上一项操作仍在进行，请稍等完成后再保存。');
+      button.disabled = true; button.textContent = '正在保存…';
+      for (const [id, label] of [['edit-price', '实际购入价'], ['edit-original-price', '原价'], ['edit-date', '购入日期']]) {
+        if ($(id).validity?.badInput) throw new Error(label + '的格式无效，请修改或留空。');
+      }
+      const record = editing;
+      const details = C.garmentDetails(Object.fromEntries(Object.entries(detailInputs).map(([field, inputId]) => [field, $(inputId).value])));
+      const archive = C.archiveDetails({ ...Object.fromEntries(Object.entries(archiveInputs).map(([field, inputId]) => [field, $(inputId).value])), photos: record.archive?.photos || [] });
+      const hasArchive = archive.photos.length || ['year', 'season', 'collection', 'look', 'relation', 'story', 'sourceUrl'].some(field => archive[field]);
+      let savedId;
+      await work('正在保存单品…', async () => {
+        await cacheWriteChain.catch(() => {});
+        const value = { ...record, name: $('edit-name').value.trim() || C.defaultName($('edit-category').value, state.garments.findIndex(g => g.id === record.id) + 1, $('edit-color').value),
+          category: $('edit-category').value, ...details, updatedAt: new Date().toISOString() };
+        if (hasArchive) value.archive = archive; else delete value.archive;
+        await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g); savedId = value.id;
+      });
+      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); openArchive(savedId); toast('档案已保存到本机。连接 GitHub 后会继续同步。');
+    } catch (error) {
+      errorBox.textContent = error?.message || '本次保存未完成，请重试。'; errorBox.hidden = false;
+      errorBox.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); throw error;
+    } finally { button.disabled = false; button.textContent = '保存档案'; }
   }
   function addArchiveFact(container, label, value) {
     if (value === undefined || value === null || value === '') return;
@@ -564,7 +579,9 @@
   }
   function appendSource(parent, value) {
     if (!value) return;
-    const a = node('a', 'archive-source', '查看资料来源 ↗'); a.href = C.sourceUrl(value); a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.append(a);
+    const source = C.sourceUrl(value);
+    if (!source.startsWith('https://')) { parent.append(node('p', 'archive-source-note', source)); return; }
+    const a = node('a', 'archive-source', '查看资料来源 ↗'); a.href = source; a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.append(a);
   }
   function openArchive(id) {
     const g = garment(id); if (!g) return; viewed = g;
@@ -595,8 +612,8 @@
       const kindLabel = node('label', '', '图片类型'), select = node('select'); select.setAttribute('aria-label', '附图类型');
       for (const [value, text] of Object.entries(C.PHOTO_KINDS)) { const option = node('option', '', text); option.value = value; select.append(option); }
       select.value = p.kind; select.addEventListener('change', e => { p.kind = e.target.value; }); kindLabel.append(select); fields.append(kindLabel);
-      for (const [key, label, max] of [['caption', '图片说明', 200], ['sourceUrl', '图片来源链接', 1200]]) {
-        const wrapper = node('label', '', label), input = node('input'); input.type = key === 'sourceUrl' ? 'url' : 'text'; input.maxLength = max; input.value = p[key] || ''; input.setAttribute('aria-label', label);
+      for (const [key, label, max] of [['caption', '图片说明', 200], ['sourceUrl', '图片来源（网址或说明）', 1200]]) {
+        const wrapper = node('label', '', label), input = node('input'); input.type = 'text'; input.maxLength = max; input.value = p[key] || ''; input.setAttribute('aria-label', label);
         input.addEventListener('input', e => { p[key] = e.target.value; }); wrapper.append(input); fields.append(wrapper);
       }
       const remove = node('button', 'text-button danger-text', '移除此附图'); remove.type = 'button'; remove.onclick = () => {

@@ -23,8 +23,17 @@
   function sourceUrl(value) {
     const text = typeof value === 'string' ? value.trim() : '';
     if (!text) return '';
-    let url; try { url = new URL(text); } catch { throw new Error('资料来源请填写完整的 HTTPS 链接。'); }
-    if (text.length > 1200 || url.protocol !== 'https:' || url.username || url.password) throw new Error('资料来源请使用不含密码的 HTTPS 链接。');
+    if (text.length > 1200) throw new Error('资料来源请控制在 1200 字以内。');
+    let candidate = text;
+    if (candidate.startsWith('//')) candidate = 'https:' + candidate;
+    else if (/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?::\d{1,5})?(?:[/?#][^\s]*)?$/i.test(candidate)) candidate = 'https://' + candidate;
+    // A provenance note is plain text. Only HTTPS sources become clickable links.
+    if (!/^https?:/i.test(candidate)) {
+      if (/^(?:javascript|data|file|vbscript|blob|ftp|mailto|tel):/i.test(candidate) || /^[a-z][a-z0-9+.-]*:\/\//i.test(candidate)) throw new Error('来源网址请使用 HTTPS；也可以填写纯文字来源说明。');
+      return text;
+    }
+    let url; try { url = new URL(candidate); } catch { throw new Error('来源网址不完整，请补充网址，或先留空再保存。'); }
+    if (url.protocol !== 'https:' || url.username || url.password) throw new Error('资料来源请使用不含密码的 HTTPS 链接。');
     return url.href;
   }
   function archiveDetails(value) {

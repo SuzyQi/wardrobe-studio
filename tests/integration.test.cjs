@@ -13,6 +13,7 @@ test('every app element reference exists, IDs are unique, and static entrypoints
   for (const match of app.matchAll(/listen\('([a-z0-9-]+)'/g)) assert.ok(ids.includes(match[1]), 'missing listener target: ' + match[1]);
   for (const match of html.matchAll(/(?:src|href)="\.\/([^"#]+)"/g)) assert.ok(fs.existsSync(path.join(root, match[1].split('?')[0])), 'missing asset: ' + match[1]);
   assert.match(html, /<dialog id="busy-overlay"/); assert.match(html, /<script src="\.\/demo.js(?:\?[^\"]+)?" defer>/);
+  assert.match(html, /<form id="edit-form" novalidate>/); assert.match(html, /id="edit-error"[^>]*role="alert"/);
 });
 test('optional cloud access is limited to GitHub and source contains no embedded credentials', () => {
   for (const file of ['index.html', 'app.js', 'cloud.js', 'memorial.js', 'images.js', 'storage.js', 'demo.js', 'styles.css']) {

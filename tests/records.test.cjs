@@ -36,7 +36,7 @@ async function start(records, options = {}) {
   const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; }, visibilityState: 'visible',
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
-    write: async operations => { for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
+    write: async operations => { if (options.failWrites > 0) { options.failWrites--; throw new Error('本机存储空间不足，请导出备份后重试。'); } for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
   const drawings = [];
   const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob),
     prepare: async file => { if (file.type !== 'image/png') throw new Error('不支持的图片'); return { image: file }; },
@@ -257,4 +257,33 @@ test('a fresh connected phone can recover a failed thumbnail using a verified fu
   assert.equal(await phone.memory.garments[0].image.text(), 'display'); assert.equal(img.style.opacity, '');
   assert.ok(api.rawGets.includes(api.manifest().garments[0].assets.image.sha));
   assert.equal(phone.elements['cloud-button-label'].textContent, '已同步'); assert.deepEqual(phone.errors, []);
+});
+
+test('plain provenance and scheme-less links save in the actual form and render as text or safe links', async () => {
+  const app = await start([oldGarment('g_sources')]); openRecord(app);
+  app.elements['archive-source'].value = 'Vogue Runway / 卖家提供'; app.elements['edit-form'].fire('submit'); await flush();
+  assert.deepEqual(app.errors, []); assert.equal(app.memory.garments[0].archive.sourceUrl, 'Vogue Runway / 卖家提供');
+  const note = app.elements['archive-reference'].children[0]; assert.equal(note.tagName, 'P'); assert.equal(note.textContent, 'Vogue Runway / 卖家提供');
+  openRecord(app); app.elements['archive-source'].value = 'www.zimmermann.com/'; app.elements['edit-form'].fire('submit'); await flush();
+  const link = app.elements['archive-reference'].children[0]; assert.equal(link.tagName, 'A'); assert.equal(link.href, 'https://www.zimmermann.com/');
+  assert.equal(app.elements['edit-save'].disabled, false);
+});
+test('save validation errors are visible inside the dialog, retain input and allow retry', async () => {
+  const app = await start([oldGarment('g_validation')]); openRecord(app);
+  app.elements['archive-year'].value = '20'; app.elements['archive-story'].value = '不要丢掉的故事';
+  app.elements['edit-form'].fire('submit'); await flush();
+  assert.equal(app.elements['edit-error'].hidden, false); assert.match(app.elements['edit-error'].textContent, /四位年份/);
+  assert.equal(app.elements['archive-story'].value, '不要丢掉的故事'); assert.equal(app.elements['edit-dialog'].open, true); assert.equal(app.writes.length, 0);
+  app.elements['archive-year'].value = ''; app.elements['edit-price'].validity = { badInput: true }; app.elements['edit-form'].fire('submit'); await flush();
+  assert.match(app.elements['edit-error'].textContent, /实际购入价/); assert.equal(app.writes.length, 0);
+  app.elements['edit-price'].validity = { badInput: false }; app.elements['edit-form'].fire('submit'); await flush();
+  assert.equal(app.memory.garments[0].archive.story, '不要丢掉的故事'); assert.equal(app.elements['edit-error'].hidden, true); assert.equal(app.elements['edit-dialog'].open, false);
+});
+test('storage errors keep the editor intact, show an inline error and allow a successful second save', async () => {
+  const app = await start([oldGarment('g_quota')], { failWrites: 1 }); openRecord(app);
+  app.elements['edit-name'].value = '新名称'; app.elements['archive-story'].value = '保留这段故事'; app.elements['edit-form'].fire('submit'); await flush();
+  assert.equal(app.memory.garments[0].name, 'g_quota'); assert.equal(app.elements['edit-dialog'].open, true);
+  assert.equal(app.elements['edit-error'].hidden, false); assert.match(app.elements['edit-error'].textContent, /空间不足/); assert.equal(app.elements['edit-save'].disabled, false);
+  app.elements['edit-form'].fire('submit'); await flush(); assert.equal(app.memory.garments[0].name, '新名称'); assert.equal(app.memory.garments[0].archive.story, '保留这段故事');
+  assert.equal(app.elements['archive-dialog'].open, true); assert.equal(app.elements['edit-save'].textContent, '保存档案');
 });
