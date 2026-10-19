@@ -74,8 +74,8 @@
       Promise.resolve().then(task).then(resolve, reject).finally(() => { activeAssetLoads--; runAssetQueue(); });
     }
   }
-  async function ensureAsset(record, field) {
-    if (record[field]) return record[field];
+  async function ensureAsset(record, field, refresh = false) {
+    if (record[field] && !refresh) return record[field];
     if (!cloud.client || record.cloudOrigin !== cloud.client.fullName || !record.cloudAssets?.[field]) throw new Error('请先连接 GitHub，以加载这件衣服的图片或原图。');
     const reference = record.cloudAssets[field], key = record.cloudOrigin + ':' + reference.sha;
     if (!assetLoads.has(key)) {
@@ -99,9 +99,30 @@
     for (const entry of entries) if (entry.isIntersecting) { const load = observedImages.get(entry.target); imageObserver.unobserve(entry.target); if (load) load(); }
   }, { rootMargin: '240px' }) : null;
   function showAsset(img, record, field) {
-    if (record[field]) { img.src = url(record[field]); return; }
-    img.classList.add('cloud-image-pending'); img.title = '连接 GitHub 后加载图片';
-    const load = () => ensureAsset(record, field).then(blob => { if (img.isConnected !== false) { img.src = url(blob); img.classList.remove('cloud-image-pending'); img.title = ''; } }).catch(() => { img.alt = '连接 GitHub 加载图片'; });
+    const marker = {}; img.wardrobeImage = marker;
+    let lastBlob, failures = 0;
+    const current = () => img.wardrobeImage === marker && img.isConnected !== false;
+    const pending = () => { img.classList.add('cloud-image-pending'); img.classList.remove('cloud-image-failed'); img.style.opacity = '0'; img.title = '正在加载图片…'; };
+    const failed = () => {
+      if (!current()) return;
+      img.classList.remove('cloud-image-pending'); img.classList.add('cloud-image-failed'); img.style.opacity = '0';
+      img.title = '图片暂未加载，请连接 GitHub 后点击「立即同步」重试';
+    };
+    const assign = (blob, renew = false) => { if (img.wardrobeImage === marker) { lastBlob = blob; img.src = url(blob, renew); } };
+    // Avoid combining native lazy loading of blob URLs with the network observer below.
+    img.loading = 'eager'; img.decoding = 'async'; pending();
+    img.onload = () => { if (current()) { img.classList.remove('cloud-image-pending', 'cloud-image-failed'); img.style.opacity = ''; img.title = ''; } };
+    img.onerror = () => {
+      if (!current()) return; pending();
+      const sourceField = field === 'thumb' ? 'image' : field;
+      const recovery = ++failures === 1 && lastBlob ? Promise.resolve(lastBlob)
+        : failures === 2 && field === 'thumb' ? ensureAsset(record, 'image')
+        : failures === (field === 'thumb' ? 3 : 2) ? ensureAsset(record, sourceField, true) : null;
+      if (!recovery) return failed();
+      recovery.then(blob => assign(blob, true)).catch(failed);
+    };
+    const load = () => ensureAsset(record, field).then(blob => { if (current()) assign(blob); }).catch(failed);
+    if (record[field]) { assign(record[field]); return; }
     if (imageObserver && (field === 'thumb' || field.startsWith('photo_'))) { observedImages.set(img, load); imageObserver.observe(img); } else load();
   }
   async function applyCloud(published, prepared, client) {
@@ -187,7 +208,7 @@
     }
   }
   const urls = new Map();
-  function url(blob) { if (!urls.has(blob)) urls.set(blob, URL.createObjectURL(blob)); return urls.get(blob); }
+  function url(blob, renew = false) { if (renew || !urls.has(blob)) urls.set(blob, URL.createObjectURL(blob)); return urls.get(blob); }
   function cleanupUrls() {
     const used = new Set();
     for (const g of [...state.garments, ...staged, ...[editing, viewed].filter(Boolean)]) for (const value of Object.values(g)) if (urls.has(value)) used.add(value);
@@ -846,6 +867,14 @@
     $('storage-status').textContent = '无法打开本机衣橱'; renderCloset(); renderBoard(); report(error);
     for (const b of document.querySelectorAll('[data-upload]')) b.disabled = true;
   }
-  window.addEventListener('pagehide', () => { for (const value of urls.values()) URL.revokeObjectURL(value); });
-  window.addEventListener('pageshow', e => { if (e.persisted) { urls.clear(); renderCloset(); renderBoard(); renderOutfits(); } });
+  function restorePageImages() {
+    if (!state.ready) return;
+    renderCloset(); renderBoard(); renderOutfits();
+    if (viewed) { const id = viewed.id, price = $('archive-export-price').checked; openArchive(id); $('archive-export-price').checked = price; }
+    if (editing) showAsset($('edit-image'), editing, 'image');
+  }
+  // A hidden page can remain alive in Safari's page cache. Keep its image URLs valid;
+  // unused images are still released by cleanupUrls, and document teardown releases the rest.
+  window.addEventListener('pageshow', restorePageImages);
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') restorePageImages(); });
 })();

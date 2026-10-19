@@ -172,7 +172,13 @@
       return { manifest: safe, head: commit.sha };
     }
     async function getAsset(reference, id) {
-      const a = validateAsset(reference, id), bytes = await request('/git/blobs/' + a.sha, { raw: true });
+      const a = validateAsset(reference, id), file = await request('/git/blobs/' + a.sha);
+      // JSON/base64 uses the same private API response format as the manifest, avoiding
+      // a separate binary media negotiation path on mobile browsers.
+      if (file?.sha !== a.sha || file.size !== a.size || file.encoding !== 'base64' || typeof file.content !== 'string' || file.content.length > a.size * 2 + 4096) throw new Error('云端图片校验失败（响应格式或大小不符），请重新同步；本机记录已保留。');
+      const encoded = file.content.replace(/\s/g, '');
+      if (encoded.length !== Math.ceil(a.size / 3) * 4 || !/^[A-Za-z0-9+/]+={0,2}$/.test(encoded)) throw new Error('云端图片编码无效，请重新同步；本机记录已保留。');
+      let bytes; try { bytes = from64(encoded); } catch { throw new Error('云端图片编码无效，请重新同步；本机记录已保留。'); }
       if (bytes.length !== a.size || await digest(bytes) !== a.hash) throw new Error('云端图片校验失败，请重新同步；本机记录已保留。');
       return new Blob([bytes], { type: a.type });
     }

@@ -109,3 +109,10 @@ test('gallery assets and archive metadata sync across devices, retain verified c
   assert.ok(api.requests.some(r => Array.isArray(r.body?.tree) && r.body.tree.some(entry => entry.path === removedPath && entry.sha === null)));
   const legacy = structuredClone(api.manifest()); legacy.version = 1; assert.equal(Cloud.validateManifest(legacy).garments.length, 1);
 });
+
+test('private photo downloads use validated JSON/base64 and reject same-size byte corruption', async () => {
+  const api = fixture(), { client, result } = await publish(api), a = result.manifest.garments[0].assets.image;
+  const blob = await client.getAsset(a, 'g_1'); assert.equal(await blob.text(), 'display'); assert.equal(blob.type, 'image/png');
+  assert.equal(api.requests.at(-1).headers.Accept, 'application/vnd.github+json');
+  api.blobs.set(a.sha, Buffer.from('CORRUPT')); await assert.rejects(client.getAsset(a, 'g_1'), /校验失败/);
+});

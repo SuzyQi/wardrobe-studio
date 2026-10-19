@@ -14,24 +14,27 @@ const source = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0f8AAAAASUVORK5CYII=';
 const oldGarment = id => ({ id, name: id, category: 'dresses', color: '', notes: '', aspect: .7, image: PNG, thumb: PNG, original: PNG, createdAt: '2024-01-01', updatedAt: '2024-01-01' });
 class Element {
-  constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.events = {}; this.attributes = {}; this.style = { setProperty() {} }; this.classList = { toggle() {}, add() {}, remove() {} }; this.value = ''; }
+  constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.events = {}; this.attributes = {}; this.style = { setProperty() {} }; this.classList = { toggle() {}, add() {}, remove() {} }; this.value = ''; this.isConnected = false; }
   set value(value) { this._value = String(value); } get value() { return this._value; }
-  append(...children) { this.children.push(...children); }
-  replaceChildren(...children) { this.children = children; }
+  setConnected(value) { this.isConnected = value; for (const child of this.children) child.setConnected?.(value); }
+  append(...children) { this.children.push(...children); for (const child of children) child.setConnected?.(this.isConnected); }
+  replaceChildren(...children) { for (const child of this.children) child.setConnected?.(false); this.children = []; this.append(...children); }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
   addEventListener(type, fn) { (this.events[type] ||= []).push(fn); }
   querySelector(tag) { for (const child of this.children) { if (child.tagName === tag.toUpperCase()) return child; const nested = child.querySelector(tag); if (nested) return nested; } return null; }
   showModal() { this.open = true; }
   close() { this.open = false; for (const fn of this.events.close || []) fn({}); }
-  fire(type, extra = {}) { const e = { target: this, preventDefault() {}, ...extra }; for (const fn of this.events[type] || []) fn(e); }
+  fire(type, extra = {}) { const e = { target: this, preventDefault() {}, ...extra }; for (const fn of this.events[type] || []) fn(e); this['on' + type]?.(e); }
 }
 const flush = async () => { await new Promise(setImmediate); await new Promise(setImmediate); };
 async function start(records, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m => [m[1], new Element()]));
+  for (const element of Object.values(elements)) element.setConnected(true);
   const errors = [], downloads = [], writes = [], timers = [], memory = { garments: records, outfits: options.outfits || [], meta: options.meta || [] }, session = options.session || new Map(), persistent = options.persistent || new Map();
-  const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; },
-    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener() {} };
+  const windowEvents = {}, documentEvents = {}, objectUrls = [], revokedUrls = [];
+  const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; }, visibilityState: 'visible',
+    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
     write: async operations => { for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
   const drawings = [];
@@ -41,10 +44,12 @@ async function start(records, options = {}) {
     blob: async canvas => new Blob([JSON.stringify({ width: canvas.width, height: canvas.height, text: canvas.lines.join('') })], { type: 'image/png' }) };
   const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
     sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
-    localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener() {} };
-  await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} }, console: { error: error => errors.push(error) },
+    localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener: (type, fn) => { (windowEvents[type] ||= []).push(fn); } };
+  await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: blob => { const url = 'blob:test-' + objectUrls.length; objectUrls.push({ url, blob }); return url; }, revokeObjectURL: url => revokedUrls.push(url) }, console: { error: error => errors.push(error) },
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => { timers[id - 1] = null; } });
-  return { elements, errors, downloads, drawings, writes, memory, session, persistent, runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
+  return { elements, errors, downloads, drawings, writes, memory, session, persistent, objectUrls, revokedUrls,
+    fireWindow: (type, event = {}) => { for (const fn of windowEvents[type] || []) fn(event); }, fireDocument: type => { for (const fn of documentEvents[type] || []) fn({}); },
+    runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); } };
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
@@ -219,4 +224,37 @@ test('a failed image batch and unsafe archive source leave the saved garment unt
   await until(() => app.errors.length); assert.equal(app.elements['archive-photo-editors'].children.length, 0); assert.equal(app.writes.length, 0);
   app.elements['archive-source'].value = 'javascript:alert(1)'; app.elements['edit-form'].fire('submit'); await flush();
   assert.equal(app.writes.length, 0); assert.equal(app.elements['edit-dialog'].open, true); assert.match(app.errors.at(-1).message, /来源/);
+});
+
+test('cached images receive sources before attachment and survive mobile page hiding and return', async () => {
+  const g = { ...oldGarment('g_mobile'), image: new Blob(['image'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }) }, app = await start([g]);
+  let img = app.elements['garment-grid'].children[0].querySelector('img');
+  assert.match(img.src, /^blob:test-/); assert.equal(img.loading, 'eager'); const first = img.src;
+  app.fireWindow('pagehide', { persisted: true }); assert.equal(app.revokedUrls.includes(first), false);
+  app.fireWindow('pageshow', { persisted: true }); img = app.elements['garment-grid'].children[0].querySelector('img');
+  assert.match(img.src, /^blob:test-/); assert.equal(app.revokedUrls.includes(img.src), false);
+  openRecord(app); app.elements['edit-name'].value = '尚未保存的名称'; app.fireDocument('visibilitychange');
+  assert.equal(app.elements['edit-name'].value, '尚未保存的名称'); assert.equal(app.memory.garments[0].name, 'g_mobile');
+  assert.match(app.elements['edit-image'].src, /^blob:test-/); assert.equal(app.writes.length, 0);
+});
+test('image decode errors renew the URL, use the full image, and stop retries without losing records', async () => {
+  const g = { ...oldGarment('g_mobile'), image: new Blob(['png'], { type: 'image/png' }), thumb: new Blob(['webp'], { type: 'image/webp' }) }, app = await start([g]);
+  const img = app.elements['garment-grid'].children[0].querySelector('img'), first = img.src;
+  img.fire('error'); await flush(); assert.notEqual(img.src, first);
+  img.fire('error'); await flush(); assert.equal(await app.objectUrls.find(x => x.url === img.src).blob.text(), await g.image.text());
+  img.fire('load'); assert.equal(img.style.opacity, '');
+  img.fire('error'); await flush(); assert.match(img.title, /立即同步/);
+  const attempts = app.objectUrls.length; img.fire('error'); await flush(); assert.equal(app.objectUrls.length, attempts);
+  assert.equal(app.writes.length, 0); assert.equal(app.memory.garments[0].thumb, g.thumb); assert.equal(app.memory.garments[0].image, g.image);
+});
+test('a fresh connected phone can recover a failed thumbnail using a verified full photo', async () => {
+  const api = fixture(), g = { ...oldGarment('g_mobile'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumbnail'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) };
+  await connect(await start([g], { api }));
+  const phone = await start([], { api }); await connect(phone); await until(() => phone.memory.garments[0]?.thumb);
+  const img = phone.elements['garment-grid'].children[0].querySelector('img');
+  img.fire('error'); await flush(); img.fire('error');
+  await until(() => phone.memory.garments[0].image); await flush(); img.fire('load');
+  assert.equal(await phone.memory.garments[0].image.text(), 'display'); assert.equal(img.style.opacity, '');
+  assert.ok(api.rawGets.includes(api.manifest().garments[0].assets.image.sha));
+  assert.equal(phone.elements['cloud-button-label'].textContent, '已同步'); assert.deepEqual(phone.errors, []);
 });

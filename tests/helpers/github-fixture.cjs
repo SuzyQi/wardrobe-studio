@@ -20,7 +20,9 @@ function fixture({ privateRepo = true } = {}) {
     if (path.startsWith('/git/trees/') && method === 'GET') return response(200, { tree: [...trees.get(path.split('/').pop())].map(([path, sha]) => ({ path, sha, type: 'blob', mode: '100644' })) });
     if (path.startsWith('/git/blobs/') && method === 'GET') {
       const id = path.split('/').pop(), bytes = blobs.get(id); if (!bytes) return response(404, {});
-      if (options.headers.Accept.includes('raw')) { rawGets.push(id); return response(200, null, bytes); }
+      // Track image payload requests in either raw or JSON/base64 form.
+      if (trees.get(commits.get(head).tree.sha).get('wardrobe.json') !== id) rawGets.push(id);
+      if (options.headers.Accept.includes('raw')) return response(200, null, bytes);
       return response(200, { sha: id, size: bytes.length, content: bytes.toString('base64'), encoding: 'base64' });
     }
     if (path === '/git/blobs' && method === 'POST') return response(201, { sha: putBlob(Buffer.from(body.content, body.encoding === 'base64' ? 'base64' : 'utf8')) });
