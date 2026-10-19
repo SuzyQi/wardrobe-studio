@@ -13,7 +13,7 @@ function harness() {
     } };
     transactions.push(tx); return tx;
   } };
-  const context = { indexedDB: { open() { const req = { result: db }; queueMicrotask(() => req.onsuccess()); return req; } }, Promise };
+  const context = { indexedDB: { open() { const req = { result: db }; queueMicrotask(() => req.onsuccess()); return req; } }, Promise, Blob, ArrayBuffer };
   vm.runInNewContext(fs.readFileSync(require.resolve('../storage.js'), 'utf8'), context);
   return { api: context.WardrobeStorage, transactions };
 }
@@ -24,6 +24,26 @@ test('one import transaction spans clothes and outfits, and reports success only
   assert.deepEqual(Array.from(tx.names), ['garments', 'outfits']); assert.equal(tx.mode, 'readwrite');
   assert.equal(tx.writes.length, 2); assert.equal(settled, false);
   tx.oncomplete(); await pending; assert.equal(settled, true);
+});
+test('images and new archive photos are written as bytes, then reopened as identical Blobs', async () => {
+  const { api, transactions } = harness(), original = new Blob([new Uint8Array([0, 255, 128, 23])], { type: 'image/png' });
+  const record = { id: 'g_bytes', image: original, original, thumb: new Blob(['thumb'], { type: 'image/webp' }), photo_p1: new Blob(['runway'], { type: 'image/jpeg' }), archive: { photos: [{ id: 'p1', kind: 'runway' }], story: '故事' } };
+  const pending = api.write([{ store: 'garments', value: record }, { store: 'meta', value: { id: 'github-sync', dirty: true } }]);
+  await nextTurn(); const tx = transactions[0], stored = tx.writes[0].value;
+  for (const field of ['image', 'thumb', 'original', 'photo_p1']) { assert.equal(stored[field] instanceof Blob, false); assert.ok(stored[field].bytes instanceof ArrayBuffer); }
+  assert.deepEqual(Array.from(new Uint8Array(stored.original.bytes)), [0, 255, 128, 23]); assert.equal(record.image, original); tx.oncomplete(); await pending;
+  const read = api.read('garments'); await nextTurn(); const readTx = transactions[1];
+  readTx.readRequest.result = [structuredClone(stored), { id: 'g_legacy', image: original }]; readTx.readRequest.onsuccess(); readTx.oncomplete();
+  const reopened = await read;
+  for (const field of ['image', 'thumb', 'original', 'photo_p1']) { assert.ok(reopened[0][field] instanceof Blob); assert.equal(reopened[0][field].type, record[field].type); assert.deepEqual(await reopened[0][field].arrayBuffer(), await record[field].arrayBuffer()); }
+  assert.equal(reopened[0].archive.story, '故事'); assert.equal(reopened[1].image, original);
+});
+test('unreadable images reject before any transaction so metadata and checkpoint cannot partially commit', async () => {
+  const { api, transactions } = harness();
+  class BrokenBlob extends Blob { async arrayBuffer() { throw new Error('cached file missing'); } }
+  const unreadable = new BrokenBlob(['broken'], { type: 'image/png' });
+  await assert.rejects(api.write([{ store: 'meta', value: { id: 'github-sync', dirty: true } }, { store: 'garments', value: { id: 'g_broken', image: unreadable } }]), error => error.name === 'ImageReadError' && error.garmentId === 'g_broken' && error.field === 'image');
+  assert.equal(transactions.length, 0); assert.equal(unreadable.size, 6);
 });
 test('quota aborts reject the operation instead of reporting a successful save', async () => {
   const { api, transactions } = harness(); await api.open();

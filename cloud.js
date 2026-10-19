@@ -135,7 +135,15 @@
       if (!TYPES[blob.type] || !blob.size || blob.size > 25 * 1024 * 1024 || !ID.test(g.id)) throw new Error('单品图片格式或大小不受支持。');
       if (prepared.get(blob)?.has(g.id)) return prepared.get(blob).get(g.id);
       const remember = value => { if (!prepared.has(blob)) prepared.set(blob, new Map()); prepared.get(blob).set(g.id, value); return value; };
-      const bytes = new Uint8Array(await blob.arrayBuffer()), hash = await digest(bytes);
+      let bytes;
+      try { bytes = new Uint8Array(await blob.arrayBuffer()); }
+      catch (error) {
+        if (!old || !options.canRecoverAsset?.(g, field)) throw error;
+        const recovered = await getAsset(old, g.id);
+        bytes = new Uint8Array(await recovered.arrayBuffer());
+        g[field] = recovered; options.onRecoveredAsset?.(g, field, blob, recovered);
+      }
+      const hash = await digest(bytes);
       if (old && old.hash === hash && old.type === blob.type) return remember(validateAsset(old, g.id));
       const created = await request('/git/blobs', { method: 'POST', body: { content: bytes64(bytes), encoding: 'base64' } });
       if (!SHA.test(created.sha)) throw new Error('GitHub 未返回有效的图片编号。');

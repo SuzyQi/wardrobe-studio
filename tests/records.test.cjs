@@ -37,9 +37,16 @@ async function start(records, options = {}) {
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [],
     querySelector: selector => selector.startsWith('dialog[open]') ? Object.entries(elements).find(([id, el]) => el.open && !(selector.includes(':not(#archive-dialog)') && id === 'archive-dialog'))?.[1] || null : null,
     addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
-  const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
+  const DB = { open: async () => {}, read: async store => {
+      const values = structuredClone(memory[store]);
+      if (store === 'garments' && options.unreadableCaches) for (const g of values) for (const field of options.unreadableCaches) if (g[field] instanceof Blob) Object.defineProperty(g[field], 'arrayBuffer', { value: async () => { throw new Error('cached file missing'); } });
+      return values;
+    },
     write: async operations => { if (options.failWrites > 0) { options.failWrites--; throw new Error('本机存储空间不足，请导出备份后重试。'); }
       if (options.rejectWrite?.(operations)) throw Object.assign(new Error('Error preparing Blob/File data'), { name: 'UnknownError' });
+      if (options.validateImageReads) for (const op of operations) if (op.store === 'garments' && op.value) for (const field of C.imageFields(op.value)) if (op.value[field] instanceof Blob) {
+        try { await op.value[field].arrayBuffer(); } catch { throw Object.assign(new Error('本机图片缓存无法读取'), { name: 'ImageReadError', garmentId: op.value.id, field }); }
+      }
       for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
   const drawings = [];
   const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob),
@@ -356,4 +363,33 @@ test('the archive respects disabled auto-sync and explains that manual sync is r
   openRecord(app); app.elements['archive-story'].value = '手动同步'; app.elements['edit-form'].fire('submit'); await until(() => app.elements['edit-dialog'].open === false);
   assert.equal(app.runSyncTimer(), false); assert.match(app.elements['archive-sync-status'].textContent, /自动同步已关闭/); assert.equal(api.manifest().garments[0].archive, undefined);
   assert.equal(app.memory.garments[0].archive.story, '手动同步'); assert.deepEqual(app.errors, []);
+});
+test('a clean remembered cloud session recovers unreadable legacy caches, then saves and syncs a new archive photo', async () => {
+  const api = fixture(), initial = await start([{ ...oldGarment('g_legacy'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  initial.elements['cloud-remember'].checked = true; await connect(initial);
+  const phone = await start(initial.memory.garments, { api, meta: initial.memory.meta, persistent: initial.persistent, unreadableCaches: ['image', 'thumb', 'original'], validateImageReads: true });
+  phone.runStartup(); await until(() => phone.elements['cloud-status'].textContent === '已同步，照片和档案保存在私有仓库' || phone.errors.length); assert.deepEqual(phone.errors, []);
+  for (const field of ['image', 'thumb', 'original']) assert.equal(await phone.memory.garments[0][field].text(), field === 'image' ? 'display' : field);
+  openRecord(phone); phone.elements['archive-story'].value = '旧缓存恢复后保存'; phone.elements['archive-files'].files = [new Blob(['new photo'], { type: 'image/png' })]; phone.elements['archive-files'].fire('change');
+  await until(() => phone.elements['archive-photo-editors'].children.length === 1); phone.elements['edit-form'].fire('submit'); await until(() => phone.elements['edit-dialog'].open === false || phone.errors.length);
+  assert.deepEqual(phone.errors, []); assert.equal(phone.memory.garments[0].archive.story, '旧缓存恢复后保存');
+  phone.runSyncTimer(); await until(() => phone.elements['cloud-button-label'].textContent === '已同步' || phone.errors.length);
+  assert.deepEqual(phone.errors, []); assert.equal(api.manifest().garments[0].archive.photos.length, 1);
+});
+test('a dirty legacy cache is not silently replaced with an older cloud image', async () => {
+  const api = fixture(), initial = await start([{ ...oldGarment('g_unsynced'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], { api });
+  await connect(initial); const metadata = structuredClone(initial.memory.meta); metadata.find(value => value.id === 'github-sync').dirty = true;
+  const phone = await start(initial.memory.garments, { api, meta: metadata, unreadableCaches: ['image'], validateImageReads: true });
+  openRecord(phone); phone.elements['archive-story'].value = '保留未同步的输入'; phone.elements['edit-form'].fire('submit'); await until(() => phone.errors.length);
+  assert.equal(phone.elements['edit-dialog'].open, true); assert.equal(phone.elements['archive-story'].value, '保留未同步的输入');
+  assert.equal(phone.memory.garments[0].archive, undefined); assert.equal(api.manifest().garments[0].archive, undefined);
+});
+test('a cached image that becomes unreadable during local save is downloaded once and the save is retried', async () => {
+  const api = fixture(), options = { api }, app = await start([{ ...oldGarment('g_recover'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) }], options);
+  await connect(app); let failed = false;
+  options.rejectWrite = ops => { if (!failed && ops.some(op => op.value?.id === 'g_recover')) { failed = true; throw Object.assign(new Error('unreadable'), { name: 'ImageReadError', garmentId: 'g_recover', field: 'image' }); } return false; };
+  openRecord(app); app.elements['archive-story'].value = '保存时恢复缓存'; app.elements['edit-form'].fire('submit');
+  await until(() => app.elements['edit-dialog'].open === false || app.errors.length); assert.deepEqual(app.errors, []);
+  assert.equal(app.memory.garments[0].archive.story, '保存时恢复缓存'); assert.equal(await app.memory.garments[0].image.text(), 'display');
+  assert.equal(api.rawGets.filter(sha => sha === api.manifest().garments[0].assets.image.sha).length, 1);
 });

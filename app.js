@@ -16,21 +16,45 @@
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
     auto: true, timer: null, message: '尚未连接 GitHub', conflict: null, authorization: null };
   const assetLoads = new Map(); let activeAssetLoads = 0, cacheWriteChain = Promise.resolve(); const assetQueue = [];
+  const trustedImageCaches = new WeakMap();
+  function cacheIdentity(record, field) { return record.cloudOrigin + ':' + record.id + ':' + field + ':' + record.cloudAssets?.[field]?.sha; }
+  function trustImage(record, field) {
+    const blob = record[field]; if (!(blob instanceof Blob)) return;
+    if (!trustedImageCaches.has(blob)) trustedImageCaches.set(blob, new Set());
+    trustedImageCaches.get(blob).add(cacheIdentity(record, field));
+  }
+  function canRecoverImage(record, field) { return !!trustedImageCaches.get(record[field])?.has(cacheIdentity(record, field)); }
+  function replaceRecoveredImage(record, field, oldBlob, blob) {
+    record[field] = blob; trustImage(record, field);
+    for (const target of [garment(record.id), editing, viewed]) {
+      if (target?.id === record.id && target[field] === oldBlob && cacheIdentity(target, field) === cacheIdentity(record, field)) { target[field] = blob; trustImage(target, field); }
+    }
+  }
   async function localWrite(operations) {
-    try { await rawLocalWrite(operations); }
-    catch (error) {
-      const origin = cloud.saved.config.owner + '/' + cloud.saved.config.repo;
-      let compacted = false;
-      const lean = await Promise.all(operations.map(async op => {
-        if (op.store !== 'garments' || op.type === 'delete') return op;
-        const value = await Cloud.withoutBackedImageCaches(op.value, origin);
-        if (value === op.value) return op;
-        compacted = true; return { ...op, value };
-      }));
-      if (!compacted) throw error;
-      // The failed transaction is already aborted. Retry all records and the sync
-      // checkpoint atomically; only byte-verified cloud-backed caches are omitted.
-      await rawLocalWrite(lean);
+    const recovered = new Set();
+    for (;;) {
+      try { await rawLocalWrite(operations); return; }
+      catch (error) {
+        const record = error.name === 'ImageReadError' ? operations.find(op => op.store === 'garments' && op.value?.id === error.garmentId)?.value : null;
+        const field = error.field, key = record && cacheIdentity(record, field);
+        if (record && cloud.client?.fullName === record.cloudOrigin && canRecoverImage(record, field) && !recovered.has(key)) {
+          recovered.add(key);
+          const oldBlob = record[field], blob = await cloud.client.getAsset(record.cloudAssets[field], record.id);
+          replaceRecoveredImage(record, field, oldBlob, blob); continue;
+        }
+        const origin = cloud.saved.config.owner + '/' + cloud.saved.config.repo;
+        let compacted = false;
+        const lean = await Promise.all(operations.map(async op => {
+          if (op.store !== 'garments' || op.type === 'delete') return op;
+          const value = await Cloud.withoutBackedImageCaches(op.value, origin);
+          if (value === op.value) return op;
+          compacted = true; return { ...op, value };
+        }));
+        if (!compacted) throw error;
+        // Retry all records and the sync
+        // checkpoint atomically; only byte-verified cloud-backed caches are omitted.
+        await rawLocalWrite(lean); return;
+      }
     }
   }
   DB.write = async operations => {
@@ -105,13 +129,13 @@
       const client = cloud.client;
       assetLoads.set(key, queuedAsset(() => client.getAsset(reference, record.id)).finally(() => assetLoads.delete(key)));
     }
-    const blob = await assetLoads.get(key); record[field] = blob;
+    const blob = await assetLoads.get(key); record[field] = blob; trustImage(record, field);
     const current = garment(record.id);
     if (current?.cloudOrigin === record.cloudOrigin && current.cloudAssets?.[field]?.sha === reference.sha) {
       current[field] = blob;
       if (!cloud.applying && !busy) {
         cacheWriteChain = cacheWriteChain.catch(() => {}).then(() => localWrite([{ store: 'garments', value: current }]));
-        try { await cacheWriteChain; } catch { $('storage-status').textContent = '图片已加载，本机缓存空间不足；云端仍保留图片'; }
+        try { await cacheWriteChain; } catch { $('storage-status').textContent = '图片已加载，本机缓存未写入；云端仍保留图片'; }
       }
     }
     if (editing?.id === record.id && editing.cloudAssets?.[field]?.sha === reference.sha) editing[field] = blob;
@@ -152,6 +176,10 @@
     cloud.applying = true;
     await cacheWriteChain.catch(() => {});
     const nextGarments = Cloud.localRecords(published.manifest, state.garments, client.fullName, prepared);
+    for (const g of nextGarments) {
+      const preparedRecord = prepared.garments.find(value => value.id === g.id);
+      for (const field of C.imageFields(g)) if (preparedRecord?.assets[field]?.sha === g.cloudAssets[field]?.sha) trustImage(g, field);
+    }
     const nextOutfits = published.manifest.outfits, ids = new Set(nextGarments.map(g => g.id)), outfitIds = new Set(nextOutfits.map(o => o.id));
     const layers = state.layers.filter(l => ids.has(l.garmentId));
     const checkpoint = { id: 'github-sync', config: { ...cloud.saved.config }, base: published.manifest, head: published.head,
@@ -215,7 +243,7 @@
     const config = remembered?.config || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
     $('cloud-token').value = '';
     const mode = remembered?.mode || ($('cloud-remember').checked ? 'device' : 'memory'), previousClient = cloud.client, previousSaved = cloud.saved;
-    const candidate = Cloud.createClient(config);
+    const candidate = Cloud.createClient({ ...config, canRecoverAsset: canRecoverImage, onRecoveredAsset: replaceRecoveredImage });
     try {
       const same = (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase() === candidate.fullName;
       cloud.client = candidate; cloud.saved = { ...cloud.saved, config: { owner: config.owner, repo: config.repo }, base: same ? cloud.saved.base : null };
@@ -906,6 +934,13 @@
     state.garments = results[0].map(g => ({ ...g, ...C.garmentDetails(g) })); state.outfits = results[1]; state.ready = true;
     const checkpoint = results[2].find(v => v.id === 'github-sync');
     if (checkpoint?.config?.owner && checkpoint.config.repo) { cloud.saved = checkpoint; cloud.auto = checkpoint.auto !== false; }
+    // An atomic clean checkpoint proves these exact in-memory cache objects came
+    // from the saved cloud version. A dirty or replaced image is never trusted.
+    if (checkpoint?.dirty === false && checkpoint.base?.garments) for (const g of state.garments) {
+      const remote = checkpoint.base.garments.find(value => value.id === g.id);
+      if (g.cloudOrigin !== (checkpoint.config.owner + '/' + checkpoint.config.repo).toLowerCase()) continue;
+      for (const field of C.imageFields(g)) if (g.cloudAssets?.[field]?.sha && remote?.assets?.[field]?.sha === g.cloudAssets[field].sha) trustImage(g, field);
+    }
     const draft = results[2].find(v => v.id === 'draft');
     if (draft && Array.isArray(draft.layers)) applySnapshot(draft); else renderBoard();
     renderCloset(); renderOutfits(); renderCloudStatus();
