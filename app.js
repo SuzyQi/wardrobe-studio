@@ -12,10 +12,27 @@
   const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
   let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
   let draftChain = Promise.resolve(), sliderStart = null;
-  const Cloud = window.WardrobeCloud, localWrite = DB.write.bind(DB);
+  const Cloud = window.WardrobeCloud, rawLocalWrite = DB.write.bind(DB);
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
     auto: true, timer: null, message: '尚未连接 GitHub', conflict: null, authorization: null };
   const assetLoads = new Map(); let activeAssetLoads = 0, cacheWriteChain = Promise.resolve(); const assetQueue = [];
+  async function localWrite(operations) {
+    try { await rawLocalWrite(operations); }
+    catch (error) {
+      const origin = cloud.saved.config.owner + '/' + cloud.saved.config.repo;
+      let compacted = false;
+      const lean = await Promise.all(operations.map(async op => {
+        if (op.store !== 'garments' || op.type === 'delete') return op;
+        const value = await Cloud.withoutBackedImageCaches(op.value, origin);
+        if (value === op.value) return op;
+        compacted = true; return { ...op, value };
+      }));
+      if (!compacted) throw error;
+      // The failed transaction is already aborted. Retry all records and the sync
+      // checkpoint atomically; only byte-verified cloud-backed caches are omitted.
+      await rawLocalWrite(lean);
+    }
+  }
   DB.write = async operations => {
     const changed = operations.some(op => op.store === 'garments' || op.store === 'outfits');
     const checkpoint = { ...cloud.saved, dirty: true };

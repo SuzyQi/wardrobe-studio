@@ -13,6 +13,19 @@ async function publish(api, garments = [garment()], outfits = []) {
   const merged = Cloud.merge(null, local, remote.manifest); assert.equal(merged.conflicts.length, 0);
   const result = await client.publish(merged.manifest, remote); return { client, local, result };
 }
+test('cache recovery removes only byte-verified cloud copies and preserves unsynced or unreadable images', async () => {
+  const api = fixture(), g = garment(); const { result, local } = await publish(api, [g]);
+  const cached = Cloud.localRecords(result.manifest, [g], 'suzyqi/wardrobe-studio-data', local)[0];
+  const lean = await Cloud.withoutBackedImageCaches(cached, 'SuzyQi/wardrobe-studio-data');
+  for (const field of ['image', 'thumb', 'original']) { assert.equal(lean[field], undefined); assert.equal(cached[field], g[field]); }
+  assert.deepEqual(lean.cloudAssets, cached.cloudAssets);
+  const changed = { ...cached, image: new Blob(['changed'], { type: cached.image.type }) };
+  assert.equal((await Cloud.withoutBackedImageCaches(changed, cached.cloudOrigin)).image, changed.image);
+  assert.equal(await Cloud.withoutBackedImageCaches(cached, 'other/repo'), cached);
+  const unreadable = { ...cached, image: { size: cached.image.size, type: cached.image.type, arrayBuffer: async () => { throw new Error('unreadable'); } } };
+  assert.equal((await Cloud.withoutBackedImageCaches(unreadable, cached.cloudOrigin)).image, unreadable.image);
+  const noRef = { ...g }; assert.equal(await Cloud.withoutBackedImageCaches(noRef, cached.cloudOrigin), noRef);
+});
 test('private uploads publish images, complete metadata and outfits as one atomic revision', async () => {
   const api = fixture(), g = garment(), outfit = { id: 'o_1', name: '周末', background: '#f8f7f3', layers: [{ id: 'l_1', garmentId: g.id, x: 100, y: 100, w: 300, rotation: 0, flip: false }] };
   const { result, local } = await publish(api, [g], [outfit]);

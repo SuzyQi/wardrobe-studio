@@ -36,7 +36,9 @@ async function start(records, options = {}) {
   const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; }, visibilityState: 'visible',
     createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [], querySelector: () => null, addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
   const DB = { open: async () => {}, read: async store => structuredClone(memory[store]),
-    write: async operations => { if (options.failWrites > 0) { options.failWrites--; throw new Error('本机存储空间不足，请导出备份后重试。'); } for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
+    write: async operations => { if (options.failWrites > 0) { options.failWrites--; throw new Error('本机存储空间不足，请导出备份后重试。'); }
+      if (options.rejectWrite?.(operations)) throw Object.assign(new Error('Error preparing Blob/File data'), { name: 'UnknownError' });
+      for (const op of operations) { writes.push(op); const items = memory[op.store], index = items.findIndex(g => g.id === (op.value?.id || op.id)); if (op.type === 'delete') { if (index >= 0) items.splice(index, 1); } else if (index < 0) items.push(structuredClone(op.value)); else items[index] = structuredClone(op.value); } } };
   const drawings = [];
   const I = { dataUrl: async value => typeof value === 'string' ? value : 'data:' + value.type + ';base64,' + Buffer.from(await value.arrayBuffer()).toString('base64'), fromDataUrl: value => value, load: async () => ({ naturalWidth: 1, naturalHeight: 1 }), download: blob => downloads.push(blob),
     prepare: async file => { if (file.type !== 'image/png') throw new Error('不支持的图片'); return { image: file }; },
@@ -286,4 +288,33 @@ test('storage errors keep the editor intact, show an inline error and allow a su
   assert.equal(app.elements['edit-error'].hidden, false); assert.match(app.elements['edit-error'].textContent, /空间不足/); assert.equal(app.elements['edit-save'].disabled, false);
   app.elements['edit-form'].fire('submit'); await flush(); assert.equal(app.memory.garments[0].name, '新名称'); assert.equal(app.memory.garments[0].archive.story, '保留这段故事');
   assert.equal(app.elements['archive-dialog'].open, true); assert.equal(app.elements['edit-save'].textContent, '保存档案');
+});
+test('a Blob cache write failure recovers the archive, retains new photos and syncs it to another device', async () => {
+  const api = fixture(), options = { api }, record = { ...oldGarment('g_blob'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) };
+  const app = await start([record], options); await connect(app);
+  options.rejectWrite = ops => ops.some(op => op.store === 'garments' && op.value?.image instanceof Blob);
+  openRecord(app); const el = app.elements; el['archive-story'].value = '秀款的收藏故事'; el['edit-price'].value = '1500';
+  el['archive-files'].files = [new Blob(['new runway'], { type: 'image/png' })]; el['archive-files'].fire('change');
+  await until(() => el['archive-photo-editors'].children.length === 1 || app.errors.length);
+  el['edit-form'].fire('submit'); await until(() => el['edit-dialog'].open === false || app.errors.length);
+  assert.deepEqual(app.errors, []); const saved = app.memory.garments[0], field = 'photo_' + saved.archive.photos[0].id;
+  assert.equal(saved.archive.story, '秀款的收藏故事'); assert.equal(saved.purchasePrice, 1500); assert.equal(saved.image, undefined);
+  assert.equal(await saved[field].text(), 'new runway'); assert.ok(saved.cloudAssets.original);
+  assert.equal(app.memory.meta.find(m => m.id === 'github-sync').dirty, true);
+  el['cloud-sync-now'].fire('click'); await until(() => el['cloud-button-label'].textContent === '已同步' || app.errors.length);
+  assert.deepEqual(app.errors, []); assert.equal(api.manifest().garments[0].archive.story, '秀款的收藏故事');
+  const phone = await start([], { api }); await connect(phone); openRecord(phone);
+  assert.equal(phone.elements['archive-story'].value, '秀款的收藏故事');
+  await until(() => phone.memory.garments[0][field] instanceof Blob);
+  assert.equal(await phone.memory.garments[0][field].text(), 'new runway');
+});
+test('if the retry also fails, neither the archive nor checkpoint is reported saved and the new photo remains staged', async () => {
+  const api = fixture(), options = { api }, record = { ...oldGarment('g_blocked'), image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumb'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }) };
+  const app = await start([record], options); await connect(app); options.rejectWrite = () => true; openRecord(app);
+  const el = app.elements; el['archive-story'].value = '待恢复故事'; el['archive-files'].files = [new Blob(['unsynced photo'], { type: 'image/png' })]; el['archive-files'].fire('change');
+  await until(() => el['archive-photo-editors'].children.length === 1); el['edit-form'].fire('submit'); await until(() => app.errors.length);
+  assert.equal(el['edit-dialog'].open, true); assert.equal(el['archive-story'].value, '待恢复故事'); assert.equal(app.memory.garments[0].archive, undefined);
+  assert.equal(app.memory.meta.find(m => m.id === 'github-sync').dirty, false); assert.equal(el['edit-error'].hidden, false);
+  options.rejectWrite = null; el['edit-form'].fire('submit'); await until(() => el['edit-dialog'].open === false);
+  const saved = app.memory.garments[0]; assert.equal(saved.archive.story, '待恢复故事'); assert.equal(await saved['photo_' + saved.archive.photos[0].id].text(), 'unsynced photo');
 });

@@ -2,6 +2,12 @@
   'use strict';
   let database;
   const DB_NAME = 'suzy-wardrobe-studio-v1';
+  function failure(cause, action) {
+    const name = cause?.name || 'StorageError';
+    const hint = name === 'QuotaExceededError' ? '浏览器存储空间不足。请先导出备份，不要清除网站数据。' : '浏览器本地数据库未完成' + action + '，本次修改尚未保存。';
+    const error = new Error(hint + '（' + name + (cause?.message ? '：' + cause.message : '') + '）');
+    error.name = name; error.cause = cause; return error;
+  }
   function open() {
     if (database) return Promise.resolve(database);
     return new Promise((resolve, reject) => {
@@ -24,10 +30,12 @@
     const db = await open();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(store, 'readonly'), req = tx.objectStore(store).getAll();
-      let value;
+      let value, cause;
       req.onsuccess = () => { value = req.result; };
+      req.onerror = () => { cause = req.error; };
       tx.oncomplete = () => resolve(value || []);
-      tx.onerror = tx.onabort = () => reject(tx.error || new Error('读取衣橱失败。'));
+      tx.onerror = event => { cause ||= event?.target?.error || tx.error; };
+      tx.onabort = () => reject(failure(cause || tx.error, '读取'));
     });
   }
   async function write(operations) {
@@ -36,15 +44,19 @@
       const names = [...new Set(operations.map(o => o.store))];
       if (!names.length) return resolve();
       const tx = db.transaction(names, 'readwrite');
+      let cause;
+      tx.oncomplete = () => resolve();
+      // Request errors bubble before tx.error is necessarily populated in Safari.
+      // Wait for abort so neither a partial write nor an early error is called success.
+      tx.onerror = event => { cause ||= event?.target?.error || tx.error; };
+      tx.onabort = () => reject(failure(cause || tx.error, '保存'));
       try {
         for (const op of operations) {
           const store = tx.objectStore(op.store);
-          if (op.type === 'delete') store.delete(op.id);
-          else store.put(op.value);
+          const req = op.type === 'delete' ? store.delete(op.id) : store.put(op.value);
+          if (req) req.onerror = () => { cause ||= req.error; };
         }
-      } catch (error) { tx.abort(); reject(error); return; }
-      tx.oncomplete = () => resolve();
-      tx.onerror = tx.onabort = () => reject(tx.error || new Error('本地保存失败，请导出备份，并检查浏览器存储空间。'));
+      } catch (error) { cause = error; tx.abort(); reject(failure(error, '保存')); }
     });
   }
   root.WardrobeStorage = { open, read, write };

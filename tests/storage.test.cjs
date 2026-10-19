@@ -8,7 +8,7 @@ function harness() {
   const transactions = [];
   const db = { close() {}, objectStoreNames: { contains: () => true }, transaction(names, mode) {
     const tx = { names, mode, writes: [], abort() { this.aborted = true; this.onabort?.(); }, objectStore(name) {
-      return { put(value) { tx.writes.push({ name, value }); if (value.fail) throw new Error('write failed'); },
+      return { put(value) { const request = {}; tx.writes.push({ name, value, request }); if (value.fail) throw new Error('write failed'); return request; },
         delete(id) { tx.writes.push({ name, id, deleted: true }); }, getAll() { const r = {}; tx.readRequest = r; return r; } };
     } };
     transactions.push(tx); return tx;
@@ -43,4 +43,12 @@ test('reads wait for transaction completion and propagate read aborts', async ()
   assert.equal((await pending)[0].id, 'g_1');
   const aborted = api.read('outfits'); await nextTurn(); const t2 = transactions[1]; t2.error = new Error('read aborted'); t2.onabort();
   await assert.rejects(aborted, /read aborted/);
+});
+test('Safari request errors are preserved when transaction.error is still null, and wait for abort', async () => {
+  const { api, transactions } = harness(); await api.open(); let settled = false;
+  const pending = api.write([{ store: 'garments', value: { id: 'g_1' } }]).finally(() => { settled = true; });
+  await nextTurn(); const tx = transactions[0], req = tx.writes[0].request;
+  req.error = Object.assign(new Error('Error preparing Blob/File data'), { name: 'UnknownError' }); req.onerror();
+  tx.onerror({ target: req }); await nextTurn(); assert.equal(settled, false); assert.equal(tx.error, undefined);
+  tx.onabort(); await assert.rejects(pending, error => error.name === 'UnknownError' && /Blob\/File/.test(error.message) && !/空间不足/.test(error.message));
 });

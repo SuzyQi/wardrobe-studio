@@ -197,5 +197,21 @@
       return value;
     });
   }
-  return { empty, metadata, validateManifest, validateAsset, merge, sameRecords, createClient, localRecords };
+  async function withoutBackedImageCaches(record, origin) {
+    if (!origin || record.cloudOrigin !== origin.toLowerCase()) return record;
+    let value = record;
+    for (const field of C.imageFields(record)) {
+      const blob = record[field], reference = record.cloudAssets?.[field];
+      if (!blob || !reference) continue;
+      try {
+        const asset = validateAsset(reference, record.id);
+        // Never discard an unsynced replacement, even if an old cloud reference remains.
+        if (blob.type !== asset.type || blob.size !== asset.size || await digest(await blob.arrayBuffer()) !== asset.hash) continue;
+        if (value === record) value = { ...record };
+        delete value[field];
+      } catch { /* Unreadable or unverified local photos must remain available for recovery. */ }
+    }
+    return value;
+  }
+  return { empty, metadata, validateManifest, validateAsset, merge, sameRecords, createClient, localRecords, withoutBackedImageCaches };
 });
