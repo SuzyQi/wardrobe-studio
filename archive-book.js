@@ -107,31 +107,44 @@
       if (state.mode !== 'wall') return;
       const wall = $('book-wall'); wall.replaceChildren();
       $('book-wall-count').textContent = items.length + ' 件收藏' + (state.query || state.brand || state.filter !== 'all' ? ' · 已筛选' : ' · 全部展示');
-      for (let n = 0; n < items.length; n += 4) {
-        const group = items.slice(n, n + 4), sheet = node('section', 'book-wall-sheet');
-        sheet.dataset.count = String(group.length); sheet.dataset.variant = (n / 4) % 2 ? 'b' : 'a';
-        sheet.setAttribute('aria-label', '第 ' + (n / 4 + 1) + ' 组收藏拼贴');
-        for (const g of group) {
-          const piece = button('book-wall-piece', undefined, () => open(g.id)); piece.dataset.garmentId = g.id;
-          piece.setAttribute('aria-label', '打开档案：' + (g.brand ? g.brand + ' / ' : '') + g.name);
-          const photo = node('span', 'book-wall-photo'), img = node('img'); img.alt = '实物：' + g.name;
-          photo.append(img); showAsset(img, g, 'thumb');
-          const attached = g.archive?.photos || [], attachedPhoto = attached.find(p => p.kind === 'runway') || attached[0];
-          if (attachedPhoto) {
-            const inset = node('span', 'book-wall-reference'), referenceImage = node('img');
-            referenceImage.alt = C.PHOTO_KINDS[attachedPhoto.kind] + '：' + g.name; inset.append(referenceImage, node('span', 'book-wall-reference-kind', C.PHOTO_KINDS[attachedPhoto.kind]));
-            showAsset(referenceImage, g, 'photo_' + attachedPhoto.id); photo.append(inset); piece.dataset.reference = 'true';
+      for (let n = 0; n < items.length; n++) {
+        const g = items[n], sheet = node('section', 'book-wall-sheet'); sheet.dataset.garmentId = g.id;
+        sheet.setAttribute('aria-label', '收藏拼贴：' + (g.brand ? g.brand + ' / ' : '') + g.name);
+        const piece = button('book-wall-piece', undefined, () => open(g.id)); piece.dataset.garmentId = g.id; piece.dataset.role = 'hero';
+        piece.setAttribute('aria-label', '打开档案：' + (g.brand ? g.brand + ' / ' : '') + g.name);
+        const attached = g.archive?.photos || [], attachedPhoto = attached.find(p => p.kind === 'runway') || attached.find(p => p.kind === 'worn') || attached[0];
+        const photo = node('span', 'book-wall-photo'), img = node('img');
+        img.alt = (attachedPhoto ? C.PHOTO_KINDS[attachedPhoto.kind] : '实物') + '：' + g.name;
+        photo.append(img); showAsset(img, g, attachedPhoto ? 'photo_' + attachedPhoto.id : 'thumb');
+        if (attachedPhoto) {
+          const inset = node('span', 'book-wall-reference'), actualImage = node('img'); actualImage.alt = '实物：' + g.name;
+          inset.append(actualImage, node('span', 'book-wall-reference-kind', '实物')); showAsset(actualImage, g, 'thumb'); photo.append(inset); piece.dataset.reference = 'true';
+        }
+        const note = node('span', 'book-wall-note');
+        note.append(node('span', 'book-wall-brand', g.brand || g.name));
+        if (g.brand) note.append(node('span', 'book-wall-name', g.name));
+        if (series(g)) note.append(node('span', 'book-wall-series', series(g)));
+        if (state.prices && C.formatPrice(g)) note.append(node('span', 'book-wall-price', '实付 ' + C.formatPrice(g)));
+        piece.append(photo, note); sheet.append(piece);
+        const others = items.filter(item => item.id !== g.id), accessories = others.filter(item => ['shoes', 'bags', 'accessories'].includes(item.category));
+        const pool = accessories.length ? accessories : others, offset = pool.length ? n % pool.length : 0;
+        const companions = [...pool.slice(offset), ...pool.slice(0, offset)].slice(0, 3);
+        if (companions.length) {
+          const satellites = node('div', 'book-wall-satellites'); satellites.append(node('p', 'book-wall-mini-heading', '其他藏品'));
+          for (const other of companions) {
+            const mini = button('book-wall-mini', undefined, () => open(other.id)); mini.dataset.garmentId = other.id;
+            mini.setAttribute('aria-label', '查看其他藏品：' + (other.brand ? other.brand + ' / ' : '') + other.name);
+            const visual = node('span', 'book-wall-mini-photo'), smallImage = node('img'); smallImage.alt = '其他藏品：' + other.name;
+            visual.append(smallImage); showAsset(smallImage, other, 'thumb');
+            const label = node('span', 'book-wall-mini-name', other.brand || other.name); label.title = other.name;
+            mini.append(visual, label); satellites.append(mini);
           }
-          const note = node('span', 'book-wall-note');
-          note.append(node('span', 'book-wall-brand', g.brand || '个人收藏'), node('span', 'book-wall-name', g.name));
-          if (series(g)) note.append(node('span', 'book-wall-series', series(g)));
-          note.append(node('span', 'book-code', 'No. ' + reference(g)));
-          if (state.prices && C.formatPrice(g)) note.append(node('span', 'book-wall-price', '实付 ' + C.formatPrice(g)));
-          piece.append(photo, note); sheet.append(piece);
+          sheet.append(satellites);
         }
         wall.append(sheet);
       }
     }
+
     function renderRecord() {
       const g = state.records.find(g => g.id === state.selected);
       setDirectory(state.directoryCollapsed); $('book-record').hidden = !g || state.mode !== 'record';
