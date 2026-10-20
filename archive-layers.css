@@ -1,0 +1,45 @@
+/* Translucent editorial papers. Scoped to the archive; originals and zoom stay untouched. */
+.book-view .book-wall-sheet{--paper-tone:180,168,184;--paper-secondary:210,204,189}
+.book-view .book-wall-sheet:nth-child(4n+2){--paper-tone:166,183,176;--paper-secondary:210,205,191}
+.book-view .book-wall-sheet:nth-child(4n+3){--paper-tone:199,171,174;--paper-secondary:189,195,204}
+.book-view .book-wall-sheet:nth-child(4n){--paper-tone:167,180,196;--paper-secondary:200,190,180}
+/* The backing sheet sits behind the cutout and inside this garment's composition. */
+.book-view .book-wall-sheet[data-photos="attached"]:before{content:'';position:absolute;left:48%;right:2%;top:7%;height:min(68%,350px);background:rgba(var(--paper-tone),.29);border:1px solid rgba(var(--paper-tone),.12);transform:rotate(1.6deg);z-index:0;pointer-events:none}
+.book-view .book-wall-photo{isolation:isolate}
+.book-view .book-wall-sheet[data-photos="attached"] .book-wall-photo:before{content:'';position:absolute;left:43%;top:24%;width:48%;height:48%;background:rgba(var(--paper-secondary),.24);transform:rotate(-2deg);z-index:0;pointer-events:none}
+.book-view .book-wall-photo>img{position:relative;z-index:1;opacity:1;filter:none}
+.book-view .book-wall-satellites{grid-column:8/13;gap:18px}
+.book-view .book-wall-mini{isolation:isolate}
+.book-view .book-wall-mini-photo{background:rgba(255,255,255,.56);border-color:rgba(var(--paper-tone),.40);box-shadow:1px 3px 6px #26334a0b}
+.book-view .book-wall-mini-photo img{opacity:.9;filter:saturate(.62)}
+.book-view .book-wall-mini:nth-child(3n+2){width:80%;align-self:flex-end;margin-top:-32px;transform:translateX(-18%) rotate(1.5deg);z-index:2}
+.book-view .book-wall-mini:nth-child(3n+2) .book-wall-mini-photo{background:rgba(var(--paper-tone),.17);border-color:rgba(var(--paper-tone),.24);box-shadow:none}
+.book-view .book-wall-mini:nth-child(3n+2) .book-wall-mini-photo img{opacity:.58;filter:saturate(.32)}
+.book-view .book-wall-mini:nth-child(3n){width:88%;margin-top:-14px;transform:translateX(-5%) rotate(-.7deg)}
+.book-view .book-wall-mini:nth-child(3n) .book-wall-mini-photo{background:rgba(var(--paper-secondary),.28)}
+.book-view .book-wall-mini:nth-child(3n) .book-wall-mini-photo img{opacity:.77;filter:saturate(.52)}
+.book-view .book-wall-mini-name{position:relative;z-index:3;opacity:1;background:rgba(252,252,250,.9);padding:2px 3px;margin-top:3px;color:#555b65}
+.book-view .book-wall-note{position:relative;z-index:3;background:transparent}
+.book-view .book-wall-story{position:relative;padding:12px 14px;background:rgba(var(--paper-secondary),.18);border-left:1px solid rgba(var(--paper-tone),.45)}
+/* Keep large photo collections compact rather than stacking unreadable layers. */
+.book-view .book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini{width:100%;margin-top:0;transform:none}
+.book-view .book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini:nth-child(even){transform:translateY(12px)}
+/* Single-record spreads keep their compact dimensions, with source prints acting as vellum. */
+.book-view #book-record .book-stage{--paper-tone:180,168,184;--paper-secondary:210,204,189;background:linear-gradient(90deg,transparent 0 49%,rgba(var(--paper-tone),.27) 49% 96%,transparent 96%),linear-gradient(0deg,rgba(var(--paper-secondary),.24) 0 28%,transparent 28%);background-color:#fcfcfa}
+.book-view #book-record .book-stage[data-page="2"]{--paper-tone:166,183,176;--paper-secondary:200,190,180}
+.book-view #book-record .book-stage[data-page="3"]{--paper-tone:199,171,174;--paper-secondary:189,195,204}
+.book-view #book-record .book-layer-base[data-kind="garment"]{background:rgba(255,255,255,.88)}
+.book-view #book-record .book-layer-base[data-kind="garment"] .book-picture{background:transparent}
+.book-view #book-record .book-plate[data-kind="garment"] .book-picture img{opacity:1;filter:none}
+.book-view #book-record .book-layer-front:not([data-kind="garment"]){background:rgba(255,255,255,.25);border-color:rgba(var(--paper-tone),.48);box-shadow:1px 2px 5px #26334a10}
+.book-view #book-record .book-layer-front:not([data-kind="garment"]) .book-picture{background:rgba(var(--paper-secondary),.14)}
+.book-view #book-record .book-layer-front:not([data-kind="garment"]) .book-picture img{opacity:.76;filter:saturate(.5)}
+.book-view #book-record .book-layer-insert:not([data-kind="garment"]){background:rgba(var(--paper-tone),.18);border-color:rgba(var(--paper-tone),.25);box-shadow:none}
+.book-view #book-record .book-layer-insert:not([data-kind="garment"]) .book-picture{background:transparent}
+.book-view #book-record .book-layer-insert:not([data-kind="garment"]) .book-picture img{opacity:.58;filter:saturate(.3)}
+.book-view #book-record .book-plate:not([data-kind="garment"]) figcaption{background:rgba(252,252,250,.92);color:var(--book-ink)}
+.book-view #book-record .book-record-heading{background:#f5f3ed}
+.book-view #book-record .book-story-sheet{background-color:#eef1ed}
+.book-view #book-record .book-collection-sheet{background:#efedf2}
+@media(max-width:600px){.book-view .book-wall-satellites{grid-column:9/13;gap:15px}.book-view .book-wall-mini:nth-child(3n+2){margin-top:-22px;transform:translateX(-12%) rotate(1deg)}.book-view .book-wall-mini:nth-child(3n){margin-top:-8px}.book-view .book-wall-sheet[data-photos="attached"]:before{left:49%;top:9%;height:61%}.book-view .book-wall-story{padding:10px 12px}.book-view .book-wall-mini-photo img{opacity:.94}.book-view .book-wall-mini:nth-child(3n+2) .book-wall-mini-photo img{opacity:.68}.book-view .book-wall-mini:nth-child(3n) .book-wall-mini-photo img{opacity:.84}}
+@media(prefers-contrast:more){.book-view .book-wall-mini-photo img,.book-view #book-record .book-plate .book-picture img{opacity:1!important;filter:none!important}}
