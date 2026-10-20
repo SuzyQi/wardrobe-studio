@@ -583,6 +583,11 @@ test('each collage leads with its actual garment, uses only its own attachments 
       assert.equal(el['book-overview'].hidden, false);
     }
   }
+  const dressSheet = el['book-wall'].children.find(sheet => sheet.dataset.garmentId === dress.id);
+  const story = find(dressSheet, 'book-wall-story'); assert.ok(story); assert.equal(find(story, 'book-wall-story-text').textContent, dress.archive.story);
+  assert.equal(find(el['book-wall'].children.find(sheet => sheet.dataset.garmentId === 'g_bag'), 'book-wall-story'), undefined);
+  story.fire('click'); assert.equal(el['book-record-body'].dataset.garmentId, dress.id); assert.ok(textOf(el['book-record-body']).includes(dress.archive.story));
+  el['book-back'].fire('click');
   const hero = el['book-wall'].children.find(sheet => sheet.dataset.garmentId === dress.id).children[0];
   hero.fire('click'); assert.equal(el['book-record-body'].dataset.garmentId, dress.id);
   el['book-back'].fire('click'); assert.equal(el['book-wall'].children.length, 3);

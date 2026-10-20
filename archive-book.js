@@ -114,6 +114,8 @@
         piece.setAttribute('aria-label', '打开档案：' + (g.brand ? g.brand + ' / ' : '') + g.name);
         const attached = g.archive?.photos || [];
         sheet.dataset.photos = attached.length ? 'attached' : 'single';
+        const aspect = Number(g.aspect) || .8;
+        sheet.dataset.silhouette = ['shoes', 'bags', 'accessories'].includes(g.category) || aspect > 1.15 ? 'compact' : aspect < .8 ? 'tall' : 'regular';
         const photo = node('span', 'book-wall-photo'), img = node('img');
         img.alt = '实物：' + g.name;
         photo.append(img); showAsset(img, g, 'thumb');
@@ -137,6 +139,12 @@
             mini.append(visual, caption); satellites.append(mini);
           }
           sheet.append(satellites);
+        }
+        if (g.archive?.story) {
+          const story = button('book-wall-story', undefined, () => open(g.id));
+          story.setAttribute('aria-label', '阅读收藏故事：' + g.name);
+          story.append(node('span', 'book-wall-story-label', 'COLLECTION NOTES'), node('span', 'book-wall-story-text', g.archive.story));
+          sheet.append(story);
         }
         wall.append(sheet);
       }

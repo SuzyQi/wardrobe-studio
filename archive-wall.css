@@ -1,35 +1,60 @@
-/* An all-piece assemblage, with cutouts, print overlays and loose typed notes. */
-.book-display-controls{display:flex;align-items:center;gap:18px;flex-wrap:wrap;border-bottom:1px solid #cdd1d6;padding:0 0 13px;margin-bottom:23px}
+/* Magazine spreads: one garment, its own source prints, and room to breathe. */
+.book-display-controls{display:flex;align-items:center;gap:20px;flex-wrap:wrap;border-bottom:1px solid #d8dadd;padding:0 0 13px;margin-bottom:25px}
 .book-display-button{font:11px/1.8 var(--book-mono);color:var(--book-muted);min-height:37px;padding:6px 0;border-bottom:2px solid transparent}
 .book-display-button[aria-pressed="true"]{color:var(--book-blue);border-bottom-color:var(--book-blue)}
-.book-overview{min-width:0;scroll-margin-top:16px}.book-wall-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:7px 0 26px}.book-wall-heading h2{font:24px/1.6 var(--serif);margin-top:8px;letter-spacing:.06em}.book-wall-heading .book-kicker{font-size:8px}
-.book-desk:has(.book-overview:not([hidden])){background:#fafaf8}
-.book-wall{min-width:0;padding-bottom:22px}
-/* Each actual garment leads; only its own attached photographs appear beside it. */
-.book-wall{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:52px 46px;align-items:start;padding:8px 0 35px}
-.book-wall-sheet{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1fr);gap:15px;align-items:start;min-width:0;margin:0;padding:0;position:relative}
-.book-wall-sheet:nth-child(even){margin-top:52px}
-.book-wall-piece{position:relative;display:block;min-width:0;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:0}
-.book-wall-photo{position:relative;display:block;width:100%;height:380px;min-width:0;background:transparent}
-.book-wall-photo>img{display:block;width:100%;height:100%;object-fit:contain;padding:0;filter:none}
-.book-wall-sheet[data-photos="single"]{grid-template-columns:minmax(0,1fr)}
-.book-wall-sheet[data-photos="single"] .book-wall-piece{width:72%}
-.book-wall-note{display:block;min-width:0;margin:12px 0 0;padding:0 2px;background:transparent;box-shadow:none;border:0}
-.book-wall-brand{display:block;font:bold 12px/1.6 var(--book-mono);text-transform:uppercase;letter-spacing:-.025em;color:var(--book-ink);overflow-wrap:anywhere}
-.book-wall-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:10px/1.8 var(--sans);color:#606872;margin-top:4px;overflow-wrap:anywhere}
-.book-wall-series{display:block;font:9px/1.8 var(--book-mono);color:var(--book-blue);margin-top:5px}.book-wall-price{display:block;font:10px/1.8 var(--book-mono);margin-top:5px;color:var(--book-muted)}
-.book-wall-satellites{display:flex;flex-direction:column;gap:17px;min-width:0;margin-top:36px;padding:11px 7px 13px;background:#f0f1ed}
-.book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:9px;background:transparent}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:57px}
-.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px}
-.book-wall-mini:nth-child(2n){transform:translateY(10px) rotate(.8deg)}
-.book-wall-mini-photo{background:#fff;border:1px solid #e0e2df;padding:3px;box-shadow:1px 2px 3px #14233d0d}
-.book-wall-mini{display:block;min-width:0;width:100%;padding:0;background:transparent;border:0;border-radius:0;text-align:center}
-.book-wall-mini-photo{position:relative;display:block;height:78px;min-width:0;width:100%}.book-wall-mini-photo img{display:block;width:100%;height:100%;object-fit:contain}
-.book-wall-mini-name{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font:8px/1.8 var(--book-mono);color:#767e89;margin-top:6px;overflow-wrap:anywhere}
-.book-wall-piece:hover .book-wall-brand,.book-wall-mini:hover .book-wall-mini-name{color:var(--book-blue)}.book-wall-piece:focus-visible,.book-wall-mini:focus-visible{outline:2px solid var(--book-blue);outline-offset:5px}
-.book-wall-photo:has(img.cloud-image-pending):after,.book-wall-photo:has(img.cloud-image-failed):after,.book-wall-mini-photo:has(img.cloud-image-pending):after,.book-wall-mini-photo:has(img.cloud-image-failed):after{content:'正在加载…';position:absolute;left:8%;right:8%;top:44%;text-align:center;color:var(--book-muted);font:9px/1.8 var(--book-mono);pointer-events:none}.book-wall-photo:has(img.cloud-image-failed):after,.book-wall-mini-photo:has(img.cloud-image-failed):after{content:'图片待同步'}
-@media(min-width:1450px){.book-wall{gap:58px 60px}.book-wall-photo{height:420px}.book-wall-mini-photo{height:88px}.book-wall-satellites{gap:22px}}
-@media(max-width:1100px){.book-wall{grid-template-columns:minmax(0,1fr);max-width:760px;margin:0 auto;gap:45px}.book-wall-sheet:nth-child(even){margin-top:0}.book-wall-sheet{grid-template-columns:minmax(0,2.4fr) minmax(0,1fr);gap:25px}.book-wall-photo{height:460px}.book-wall-mini-photo{height:95px}.book-wall-satellites{gap:23px;margin-top:43px}.book-wall-brand{font-size:14px}.book-wall-name{font-size:11px}}
-@media(max-width:800px){.book-display-controls{gap:15px;margin-bottom:17px}.book-display-button{font-size:10px}.book-wall-heading{padding-bottom:22px}.book-wall-heading h2{font-size:23px}}
-@media(max-width:600px){.book-wall{gap:43px;padding-bottom:25px}.book-wall-sheet{grid-template-columns:minmax(0,2.5fr) minmax(0,1fr);gap:11px}.book-wall-photo{height:340px}.book-wall-satellites{margin-top:35px;padding:9px 4px;gap:18px}.book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:20px}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:45px}.book-wall-mini-photo{height:65px}.book-wall-mini-name{font-size:7px}.book-wall-brand{font-size:11px}.book-wall-name{font-size:10px}.book-wall-series{font-size:8px}.book-wall-price{font-size:9px}.book-wall-note{margin-top:10px}}
-@media(max-width:380px){.book-wall-photo{height:300px}.book-wall-mini-photo{height:57px}.book-wall-heading h2{font-size:20px}.book-wall-heading .book-kicker{font-size:7px}.book-display-controls{gap:11px}.book-display-button{font-size:9px}}
+.book-overview{min-width:0;scroll-margin-top:16px}
+.book-wall-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:12px 0 44px}
+.book-wall-heading h2{font:32px/1.6 var(--serif);margin-top:10px;letter-spacing:.04em}
+.book-wall-heading .book-kicker{font-size:8px;letter-spacing:.12em}
+.book-desk:has(.book-overview:not([hidden])){background:#fcfcfa;padding:24px 30px 40px}
+/* A quiet twelve-column rhythm; each group remains in normal flow. */
+.book-wall{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:38px;row-gap:84px;align-items:start;min-width:0;padding:12px 0 60px}
+.book-wall-sheet{--hero-height:390px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-column:span 6;align-items:start;min-width:0;margin:0;padding:0;position:relative;isolation:isolate}
+.book-wall-sheet:nth-child(4n+1),.book-wall-sheet:nth-child(4n){grid-column:span 7}
+.book-wall-sheet:nth-child(4n+2),.book-wall-sheet:nth-child(4n+3){grid-column:span 5}
+.book-wall-sheet:nth-child(4n+2){margin-top:112px}
+.book-wall-sheet:nth-child(4n){margin-top:72px}
+.book-wall-sheet[data-silhouette="tall"]{--hero-height:470px}
+.book-wall-sheet[data-silhouette="compact"]{--hero-height:280px}
+.book-wall-sheet:nth-child(4n+2)[data-silhouette="tall"],.book-wall-sheet:nth-child(4n+3)[data-silhouette="tall"]{--hero-height:410px}
+.book-wall-piece{grid-column:1/10;grid-row:1;position:relative;display:block;min-width:0;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:0;z-index:1}
+.book-wall-photo{position:relative;display:block;width:100%;height:var(--hero-height);min-width:0;background:transparent}
+.book-wall-photo>img{display:block;width:100%;height:100%;object-fit:contain;object-position:center bottom;padding:0;filter:none}
+.book-wall-sheet[data-photos="single"] .book-wall-piece{grid-column:2/12}
+.book-wall-sheet:nth-child(4n+3)[data-photos="single"] .book-wall-piece{grid-column:1/11}
+.book-wall-note{display:block;min-width:0;margin:18px 0 0;padding:0 5px 0 0;background:transparent;box-shadow:none;border:0;max-width:260px}
+.book-wall-note:before{content:'';display:block;width:23px;height:1px;background:var(--book-blue);margin-bottom:10px}
+.book-wall-brand{display:block;font:600 12px/1.6 var(--book-mono);text-transform:uppercase;letter-spacing:.035em;color:var(--book-ink);overflow-wrap:anywhere}
+.book-wall-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:11px/1.8 var(--sans);color:#61646a;margin-top:4px;overflow-wrap:anywhere}
+.book-wall-series{display:block;font:9px/1.8 var(--book-mono);color:var(--book-blue);margin-top:6px}
+.book-wall-price{display:block;font:10px/1.8 var(--book-mono);margin-top:5px;color:var(--book-muted)}
+/* Only the edge of a source print enters the main image's margin, within its group. */
+.book-wall-satellites{grid-column:9/13;grid-row:1;display:flex;flex-direction:column;align-items:flex-end;gap:20px;min-width:0;margin-top:55px;padding:0 0 12px;position:relative;z-index:2}
+.book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:24px}
+.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:82px}
+.book-wall-mini{display:block;min-width:0;width:100%;padding:0;background:transparent;border:0;border-radius:0;text-align:left;position:relative}
+.book-wall-mini:nth-child(3n+1){transform:rotate(-1.1deg)}
+.book-wall-mini:nth-child(3n+2){width:78%;align-self:flex-end;transform:rotate(1.2deg);margin-top:-8px}
+.book-wall-mini:nth-child(3n){width:88%;align-self:flex-start;transform:rotate(-.4deg)}
+.book-wall-mini-photo{position:relative;display:block;height:160px;min-width:0;width:100%;background:#fff;border:1px solid #dfe0dd;padding:4px;box-shadow:1px 3px 5px #20252d12}
+.book-wall-mini:first-child .book-wall-mini-photo{height:195px}
+.book-wall-mini:nth-child(3n+2) .book-wall-mini-photo{height:112px}
+.book-wall-mini-photo img{display:block;width:100%;height:100%;object-fit:contain}
+.book-wall-mini-name{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font:8px/1.8 var(--book-mono);color:#73777e;margin-top:6px;overflow-wrap:anywhere}
+/* A longer collection uses a compact contact sheet; every saved attachment stays available. */
+.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:15px 8px;margin-top:35px}
+.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini{width:100%;margin-top:0;transform:none}
+.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini:nth-child(even){transform:translateY(14px)}
+.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini-photo{height:100px;padding:3px}
+.book-wall-story{grid-column:3/12;display:block;min-width:0;max-width:330px;justify-self:start;text-align:left;padding:0;margin:27px 0 0;background:transparent;border:0;border-radius:0}
+.book-wall-story-label{display:block;font:8px/1.8 var(--book-mono);letter-spacing:.08em;color:var(--book-blue);margin-bottom:7px}
+.book-wall-story-text{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;font:14px/1.95 var(--serif);color:#555a60;white-space:pre-line}
+.book-wall-piece:hover .book-wall-brand,.book-wall-mini:hover .book-wall-mini-name,.book-wall-story:hover .book-wall-story-text{color:var(--book-blue)}
+.book-wall-piece:focus-visible,.book-wall-mini:focus-visible,.book-wall-story:focus-visible{outline:2px solid var(--book-blue);outline-offset:5px}
+.book-wall-photo:has(img.cloud-image-pending):after,.book-wall-photo:has(img.cloud-image-failed):after,.book-wall-mini-photo:has(img.cloud-image-pending):after,.book-wall-mini-photo:has(img.cloud-image-failed):after{content:'正在加载…';position:absolute;left:8%;right:8%;top:44%;text-align:center;color:var(--book-muted);font:9px/1.8 var(--book-mono);pointer-events:none}
+.book-wall-photo:has(img.cloud-image-failed):after,.book-wall-mini-photo:has(img.cloud-image-failed):after{content:'图片待同步'}
+@media(min-width:1450px){.book-wall{column-gap:48px;row-gap:100px}.book-wall-sheet[data-silhouette="tall"]{--hero-height:510px}.book-wall-sheet:nth-child(4n+2)[data-silhouette="tall"],.book-wall-sheet:nth-child(4n+3)[data-silhouette="tall"]{--hero-height:450px}}
+@media(max-width:1050px){.book-wall{grid-template-columns:minmax(0,1fr);max-width:680px;margin:0 auto;row-gap:74px}.book-wall-sheet:nth-child(n){grid-column:1;width:94%;margin-top:0}.book-wall-sheet:nth-child(even){width:86%;justify-self:end}.book-wall-sheet[data-silhouette="tall"],.book-wall-sheet:nth-child(n)[data-silhouette="tall"]{--hero-height:490px}.book-wall-sheet[data-silhouette="compact"]{--hero-height:310px}.book-wall-mini-photo{height:175px}.book-wall-mini:first-child .book-wall-mini-photo{height:215px}}
+@media(max-width:800px){.book-desk:has(.book-overview:not([hidden])){padding:18px 14px 30px}.book-display-controls{gap:15px;margin-bottom:17px}.book-display-button{font-size:10px}.book-wall-heading{padding-bottom:30px}.book-wall-heading h2{font-size:27px}}
+@media(max-width:600px){.book-wall{row-gap:60px;padding:8px 0 35px}.book-wall-sheet:nth-child(n){width:100%}.book-wall-sheet{--hero-height:300px}.book-wall-sheet[data-silhouette="tall"],.book-wall-sheet:nth-child(n)[data-silhouette="tall"]{--hero-height:365px}.book-wall-sheet[data-silhouette="compact"]{--hero-height:220px}.book-wall-sheet:nth-child(even) .book-wall-piece{grid-column:1/10}.book-wall-sheet:nth-child(even)[data-photos="single"] .book-wall-piece{grid-column:2/12}.book-wall-mini-photo{height:103px;padding:3px}.book-wall-mini:first-child .book-wall-mini-photo{height:132px}.book-wall-mini:nth-child(3n+2) .book-wall-mini-photo{height:78px}.book-wall-satellites{margin-top:44px;gap:17px}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:65px}.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]) .book-wall-mini-photo{height:67px;padding:2px}.book-wall-mini-name{font-size:7px}.book-wall-note{margin-top:14px}.book-wall-brand{font-size:10px}.book-wall-name{font-size:10px}.book-wall-series{font-size:8px}.book-wall-price{font-size:9px}.book-wall-story{grid-column:2/12;margin-top:22px}.book-wall-story-text{font-size:13px}}
+@media(max-width:380px){.book-wall-sheet[data-silhouette="tall"],.book-wall-sheet:nth-child(n)[data-silhouette="tall"]{--hero-height:320px}.book-wall-sheet[data-silhouette="compact"]{--hero-height:185px}.book-wall-mini:first-child .book-wall-mini-photo{height:112px}.book-wall-heading h2{font-size:23px}.book-wall-heading .book-kicker{font-size:7px}.book-display-controls{gap:11px}.book-display-button{font-size:9px}}
