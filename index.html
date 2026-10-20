@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="./archive-index.css?v=20261020-collection-wall">
 <link rel="stylesheet" href="./archive-wall.css?v=20261020-magazine">
   <link rel="stylesheet" href="./archive-layers.css?v=20261020-vellum">
+  <link rel="stylesheet" href="./experiment-entry.css?v=20261020-lab">
   <script src="./core.js?v=20261020-image-bytes" defer></script>
   <script src="./storage.js?v=20261020-image-bytes" defer></script>
   <script src="./images.js?v=20261020-image-bytes" defer></script>
@@ -22,7 +23,7 @@
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
   <script src="./archive-book.js?v=20261020-magazine" defer></script>
-  <script src="./app.js?v=20261020-archive-book" defer></script>
+  <script src="./app.js?v=20261020-lab" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -48,7 +49,8 @@
 <a class="skip-link" href="#workspace">跳到我的衣橱</a>
 <header class="site-header">
   <a class="brand" href="./" aria-label="衣橱间首页"><span class="brand-mark"><svg class="icon"><use href="#i-hanger"/></svg></span><span>衣橱间<small>WARDROBE STUDIO</small></span></a>
-  <nav class="main-nav" aria-label="页面" style="gap:clamp(12px,2.2vw,28px)"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button><button class="nav-link" data-view="book">档案册</button><a class="nav-link" href="./wear.html" style="display:inline-flex;align-items:center">穿着日记</a></nav>
+  <nav class="main-nav" aria-label="页面" style="gap:clamp(12px,2.2vw,28px)"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button>
+    <a class="nav-link" href="./experiment.html">拼贴实验</a><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button><button class="nav-link" data-view="book">档案册</button><a class="nav-link" href="./wear.html" style="display:inline-flex;align-items:center">穿着日记</a></nav>
   <div class="header-actions"><button class="button ghost cloud-button" id="open-cloud" aria-label="GitHub 同步设置"><svg class="icon"><use href="#i-cloud"/></svg><span id="cloud-button-label">GitHub 同步</span></button><button class="button ghost backup-button" id="open-backup"><svg class="icon"><use href="#i-download"/></svg><span>备份</span></button><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg><span>添加衣服</span></button></div>
 </header>
 <main>
@@ -67,6 +69,7 @@
     </div>
     <aside class="styling-panel" aria-label="搭配工作台">
       <div class="section-heading"><div><p class="eyebrow">THE STYLING TABLE</p><h2>今天，怎么搭？</h2></div><div class="mini-actions"><button id="undo" class="icon-button" aria-label="撤销画布操作" title="撤销" disabled><svg class="icon"><use href="#i-undo"/></svg></button><button id="new-outfit" class="icon-button" aria-label="新建搭配" title="新建搭配"><svg class="icon"><use href="#i-plus"/></svg></button></div></div>
+      <a class="experiment-shortcut" href="./experiment.html?from=board">随机来一套 ↗ <small>去拼贴实验，保留画布里的单品</small></a>
       <div class="board-top"><input id="outfit-name" aria-label="搭配名称" placeholder="给这套搭配起个名字（选填）" maxlength="100"><span id="layer-count">0 件</span></div>
       <div id="outfit-board" class="outfit-board" tabindex="0" aria-label="搭配画布。选择单品后可拖动、调整大小，用方向键微调位置。"><div id="board-empty" class="board-empty"><svg class="icon"><use href="#i-spark"/></svg><p>把衣橱里的喜欢<br>放在一起看看</p><span>添加单品后，自由拖动与缩放</span></div><div id="board-layers" class="board-layers"></div><span class="board-signature" aria-hidden="true">A LOOK TO LOVE</span></div>
       <div class="board-options"><div class="swatches" id="background-options" aria-label="画布背景"></div><button class="text-button" id="arrange-board"><svg class="icon"><use href="#i-grid"/></svg>整理排版</button></div>

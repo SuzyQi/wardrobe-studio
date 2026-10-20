@@ -961,6 +961,8 @@
     const draft = results[2].find(v => v.id === 'draft');
     if (draft && Array.isArray(draft.layers)) applySnapshot(draft); else renderBoard();
     renderCloset(); renderOutfits(); renderCloudStatus();
+    const initialView = window.location?.search ? new URLSearchParams(window.location.search).get('view') : null;
+    if (['closet', 'outfits', 'book'].includes(initialView)) setView(initialView);
     const remembered = storedAuthorization();
     if (remembered && Cloud) setTimeout(() => connectCloud(remembered).catch(report), 0);
   } catch (error) {

@@ -1,0 +1,6 @@
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory();else root.CollageStore=factory(root.indexedDB);})(typeof globalThis!=='undefined'?globalThis:this,function(indexedDB){
+'use strict';let database;
+function open(){if(database)return database;database=new Promise((resolve,reject)=>{if(!indexedDB)return reject(new Error('浏览器不支持本地保存，请导出 PNG。'));const r=indexedDB.open('wardrobe-collage-lab-v1',1);r.onupgradeneeded=()=>r.result.createObjectStore('experiments',{keyPath:'id'});r.onsuccess=()=>{r.result.onversionchange=()=>{r.result.close();database=null;};resolve(r.result);};r.onerror=()=>reject(r.error);r.onblocked=()=>reject(new Error('请关闭其他旧版实验页后重试。'));});database.catch(()=>{database=null;});return database;}
+async function run(mode,fn){const db=await open();return new Promise((resolve,reject)=>{let result;const tx=db.transaction('experiments',mode),s=tx.objectStore('experiments');try{const req=fn(s);req.onsuccess=()=>{result=req.result;};}catch(e){tx.abort();reject(e);return;}tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error||new Error('实验未能保存。'));tx.onerror=()=>{};});}
+return {read:()=>run('readonly',s=>s.getAll()),save:row=>run('readwrite',s=>s.put(row)),remove:id=>run('readwrite',s=>s.delete(id))};
+});
