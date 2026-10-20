@@ -15,9 +15,16 @@
   }
   function create({ document, showAsset, onEdit, onStyle, onExport, onUpload }) {
     const $ = id => document.getElementById(id);
-    const state = { records: [], query: '', brand: '', filter: 'all', selected: null, prices: false };
+    const state = { records: [], query: '', brand: '', filter: 'all', selected: null, prices: false, directoryCollapsed: true };
     const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = String(text); return el; };
     const button = (className, text, action) => { const el = node('button', className, text); el.type = 'button'; el.onclick = action; return el; };
+    function setDirectory(collapsed) {
+      state.directoryCollapsed = collapsed;
+      $('book-index').hidden = collapsed; $('book-shell').dataset.directory = collapsed ? 'closed' : 'open';
+      const toggle = $('book-directory-toggle'); toggle.setAttribute('aria-expanded', String(!collapsed));
+      toggle.textContent = collapsed ? '展开目录 ›' : '‹ 收起目录';
+      toggle.setAttribute('aria-label', collapsed ? '展开收录目录' : '收起收录目录');
+    }
     function source(parent, value) {
       if (!value) return;
       let href; try { href = C.sourceUrl(value); } catch { href = ''; }
@@ -93,7 +100,7 @@
     }
     function renderRecord() {
       const g = state.records.find(g => g.id === state.selected);
-      $('book-index').hidden = false; $('book-record').hidden = !g;
+      setDirectory(state.directoryCollapsed); $('book-record').hidden = !g;
       if (!g) { state.selected = null; $('book-record-body').replaceChildren(); return; }
       const a = C.archiveDetails(g.archive) || { photos: [] }, body = $('book-record-body');
       const inventoryOpen = body.dataset.garmentId === g.id && body.querySelector('details')?.open;
@@ -140,14 +147,15 @@
     $('book-prices').addEventListener('change', e => { state.prices = e.target.checked; render(); });
     function resetFilters() { state.query = state.brand = ''; state.filter = 'all'; $('book-search').value = $('book-brand').value = ''; $('book-filter').value = 'all'; }
     $('book-reset').onclick = () => { resetFilters(); render(); };
-    $('book-back').onclick = () => { $('book-index').focus?.({ preventScroll: true }); $('book-index').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); };
+    $('book-back').onclick = () => { setDirectory(false); $('book-index').focus?.({ preventScroll: true }); $('book-index').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); };
     $('book-previous').onclick = () => move(-1); $('book-next').onclick = () => move(1);
     $('book-edit').onclick = () => { if (state.selected) onEdit(state.selected); };
     $('book-style').onclick = () => { if (state.selected) onStyle(state.selected); };
     $('book-export').onclick = () => { if (state.selected) onExport(state.selected, !!$('book-export-price').checked); };
     $('book-upload').onclick = onUpload;
     $('book-photo-close').onclick = () => $('book-photo-viewer').close();
-    $('book-record').hidden = true;
+    $('book-directory-toggle').onclick = () => setDirectory(!state.directoryCollapsed);
+    setDirectory(true); $('book-record').hidden = true;
     return { render, open, setSync: text => { $('book-sync-status').textContent = text; } };
   }
   return { reference, series, select, create };

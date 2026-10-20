@@ -67,7 +67,7 @@ async function start(records, options = {}) {
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
-function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); }
+function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); if (app.elements['book-index'].hidden) app.elements['book-directory-toggle'].fire('click'); }
 function textOf(el) { return [el.textContent || '', ...el.children.map(textOf)].join(' '); }
 function bookGarment() { return { ...oldGarment('g_book'), brand: 'Zimmermann', name: '秀款露背旗袍', purchasePrice: 1500, currency: 'CNY', archive: { year: '2020', season: 'resort', relation: 'runway_match', verification: 'pending', sourceUrl: 'Vogue Runway / 卖家提供', story: '找到这件衣服的故事', photos: [{ id: 'p_runway', kind: 'runway', caption: '秀场参考图', sourceUrl: 'https://example.com/runway' }, { id: 'p_detail', kind: 'detail', caption: '面料与标签', sourceUrl: '' }] }, photo_p_runway: PNG, photo_p_detail: PNG }; }
 
@@ -516,4 +516,20 @@ test('layered photographs open unobstructed with their own full caption and sour
   const main = find(el['book-record-body'], 'book-plate book-layer-base'); main.querySelector('button').fire('click');
   assert.match(el['book-photo-image'].alt, /实物：秀款露背旗袍/); assert.equal(el['book-photo-note'].querySelector('a'), null);
   el['book-photo-close'].fire('click'); assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
+});
+
+test('the archive directory folds left by default and preserves the active photo page, filters and prices when toggled', async () => {
+  const records = [bookGarment()], app = await start(records), el = app.elements;
+  app.navigation.find(button => button.dataset.view === 'book').onclick();
+  assert.equal(el['book-index'].hidden, true); assert.equal(el['book-record'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'false');
+  const body = el['book-record-body'].children; el['book-export-price'].checked = true;
+  el['book-directory-toggle'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-shell'].dataset.directory, 'open');
+  assert.equal(el['book-record-body'].children, body); assert.equal(el['book-export-price'].checked, true);
+  el['book-search'].value = 'Zimmermann'; el['book-search'].fire('input');
+  el['book-directory-toggle'].fire('click'); assert.equal(el['book-index'].hidden, true);
+  el['book-next'].fire('click'); assert.equal(el['book-index'].hidden, true);
+  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'true');
+  assert.equal(el['book-search'].value, 'Zimmermann'); assert.equal(el['book-grid'].children[0].dataset.selected, 'true');
+  el['book-directory-toggle'].fire('click'); app.navigation.find(button => button.dataset.view === 'closet').onclick(); app.navigation.find(button => button.dataset.view === 'book').onclick();
+  assert.equal(el['book-index'].hidden, true); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/); assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });
