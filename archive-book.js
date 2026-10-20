@@ -42,12 +42,33 @@
     function chapter(number, title) {
       const section = node('section', 'book-chapter'); section.append(node('p', 'book-kicker', number + ' / RECORD'), node('h3', '', title)); return section;
     }
+    function renderCover(items) {
+      const cover = $('book-cover'); cover.replaceChildren(); cover.hidden = !items.length;
+      if (!items.length) return;
+      const g = items.find(item => item.archive?.photos?.length) || items[0], a = g.archive || {};
+      const photo = a.photos?.find(p => p.kind === 'runway') || a.photos?.[0], other = items.find(item => item.id !== g.id);
+      function print(record, field, label, className) {
+        const sheet = button('book-cover-print ' + className, undefined, () => open(record.id)); sheet.setAttribute('aria-label', '打开档案册：' + record.name);
+        const visual = node('span', 'book-cover-image'), img = node('img'); img.alt = label + '：' + record.name; visual.append(img); showAsset(img, record, field);
+        sheet.append(visual, node('span', 'book-cover-caption', label), node('span', 'book-cover-brand', record.brand || record.name)); return sheet;
+      }
+      cover.append(print(g, 'image', 'COLLECTED PIECE / 实物', 'book-cover-primary'));
+      if (photo) cover.append(print(g, 'photo_' + photo.id, C.PHOTO_KINDS[photo.kind] + ' / REFERENCE', 'book-cover-secondary'));
+      else if (other) cover.append(print(other, 'thumb', 'FROM THE COLLECTION / 收录单品', 'book-cover-secondary'));
+      const file = node('div', 'book-cover-file');
+      file.append(node('p', 'book-kicker', 'PERSONAL COLLECTION'), node('p', 'book-file-brand', g.brand || '衣橱收藏'), node('p', 'book-file-name', g.name));
+      const row = node('p', 'book-file-line'); row.append(node('span', '', 'CATALOGUE No.'), node('strong', '', reference(g))); file.append(row);
+      if (series(g)) file.append(node('p', 'book-file-line', series(g)));
+      file.append(node('p', 'book-file-handwriting', a.story ? a.story.slice(0, 58) + (a.story.length > 58 ? '…' : '') : '衣服，和它的来历。'));
+      file.append(button('book-text-button', '翻开这份档案 ↗', () => open(g.id))); cover.append(file);
+    }
     function renderIndex() {
       const options = C.brandOptions(state.records), brands = $('book-brand');
       if (state.brand && !options.some(b => b.value === state.brand)) state.brand = '';
       brands.replaceChildren(); const all = node('option', '', '全部品牌'); all.value = ''; brands.append(all);
       for (const option of options) { const el = node('option', '', option.label + '（' + option.count + '）'); el.value = option.value; brands.append(el); } brands.value = state.brand;
       const items = select(state.records, state), grid = $('book-grid'); grid.replaceChildren();
+      renderCover(items);
       $('book-total').textContent = String(state.records.length).padStart(2, '0');
       $('book-results').textContent = items.length + ' 份档案' + (state.query || state.brand || state.filter !== 'all' ? ' · 已筛选' : ' · 按品牌整理');
       $('book-empty').hidden = state.records.length > 0; $('book-no-results').hidden = !state.records.length || items.length > 0;

@@ -449,3 +449,13 @@ test('the book handles an empty collection, page turns, return to index and stab
   el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, true);
   assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });
+test('the collage cover uses actual reference photos, and every print opens its own record', async () => {
+  const app = await start([bookGarment(), { ...oldGarment('g_second'), brand: '另一品牌', name: '另一件衣服' }]), el = app.elements;
+  openBook(app); assert.equal(el['book-cover'].hidden, false);
+  const cover = textOf(el['book-cover']); assert.match(cover, /Zimmermann/); assert.match(cover, /秀场/); assert.match(cover, /找到这件衣服的故事/);
+  find(el['book-cover'], 'book-cover-print book-cover-secondary').fire('click'); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/);
+  el['book-back'].fire('click'); el['book-search'].value = '找不到的名字'; el['book-search'].fire('input'); assert.equal(el['book-cover'].hidden, true);
+  const plain = await start([{ ...oldGarment('g_a'), brand: 'A', name: '第一件' }, { ...oldGarment('g_b'), brand: 'B', name: '第二件' }]); openBook(plain);
+  const second = find(plain.elements['book-cover'], 'book-cover-print book-cover-secondary'); assert.match(textOf(second), /收录单品/); assert.doesNotMatch(textOf(second), /秀场/);
+  second.fire('click'); assert.match(textOf(plain.elements['book-record-body']), /第二件/); assert.equal(plain.writes.length, 0); assert.deepEqual(app.errors, []); assert.deepEqual(plain.errors, []);
+});
