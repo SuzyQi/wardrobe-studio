@@ -6,6 +6,7 @@ const vm = require('node:vm');
 const C = require('../core.js');
 const Cloud = require('../cloud.js');
 const Memorial = require('../memorial.js');
+const ArchiveBook = require('../archive-book.js');
 const { fixture } = require('./helpers/github-fixture.cjs');
 globalThis.crypto ||= require('node:crypto').webcrypto;
 const root = path.resolve(__dirname, '..');
@@ -31,10 +32,11 @@ const flush = async () => { await new Promise(setImmediate); await new Promise(s
 async function start(records, options = {}) {
   const elements = Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m => [m[1], new Element()]));
   for (const element of Object.values(elements)) element.setConnected(true);
+  const navigation = [...html.matchAll(/<button[^>]*data-view="([^"]+)"[^>]*>/g)].map(match => { const el = new Element('button'); el.dataset.view = match[1]; return el; });
   const errors = [], downloads = [], writes = [], timers = [], memory = { garments: records, outfits: options.outfits || [], meta: options.meta || [] }, session = options.session || new Map(), persistent = options.persistent || new Map();
   const windowEvents = {}, documentEvents = {}, objectUrls = [], revokedUrls = [];
   const document = { getElementById: id => { assert.ok(elements[id], 'missing form element: ' + id); return elements[id]; }, visibilityState: 'visible',
-    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: () => [],
+    createElement: tag => new Element(tag), createElementNS: (_, tag) => new Element(tag), createTextNode: text => Object.assign(new Element('text'), { textContent: text }), querySelectorAll: selector => selector === '[data-view]' ? navigation : [],
     querySelector: selector => selector.startsWith('dialog[open]') ? Object.entries(elements).find(([id, el]) => el.open && !(selector.includes(':not(#archive-dialog)') && id === 'archive-dialog'))?.[1] || null : null,
     addEventListener: (type, fn) => { (documentEvents[type] ||= []).push(fn); } };
   const DB = { open: async () => {}, read: async store => {
@@ -53,18 +55,21 @@ async function start(records, options = {}) {
     prepare: async file => { if (file.type !== 'image/png') throw new Error('不支持的图片'); return { image: file }; },
     canvas: (width, height) => { const lines = [], context = { fillRect() {}, drawImage: (...args) => drawings.push(args), fillText: text => lines.push(text), measureText(text) { return { width: [...text].length * parseInt(this.font) }; } }; return { width, height, lines, getContext: () => context }; },
     blob: async canvas => new Blob([JSON.stringify({ width: canvas.width, height: canvas.height, text: canvas.lines.join('') })], { type: 'image/png' }) };
-  const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
+  const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeArchiveBook: ArchiveBook, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
     sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
     localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener: (type, fn) => { (windowEvents[type] ||= []).push(fn); } };
   await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: blob => { const url = 'blob:test-' + objectUrls.length; objectUrls.push({ url, blob }); return url; }, revokeObjectURL: url => revokedUrls.push(url) }, console: { error: error => errors.push(error) },
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; }, clearTimeout: id => { timers[id - 1] = null; } });
-  return { elements, errors, downloads, drawings, writes, memory, session, persistent, objectUrls, revokedUrls,
+  return { elements, navigation, errors, downloads, drawings, writes, memory, session, persistent, objectUrls, revokedUrls,
     fireWindow: (type, event = {}) => { for (const fn of windowEvents[type] || []) fn(event); }, fireDocument: type => { for (const fn of documentEvents[type] || []) fn({}); },
     runStartup: () => { for (const timer of timers.slice()) if (timer?.delay === 0) timer.fn(); },
     runSyncTimer: () => { const index = timers.findIndex(timer => timer?.delay === 3000); if (index < 0) return false; const timer = timers[index]; timers[index] = null; timer.fn(); return true; } };
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
+function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); }
+function textOf(el) { return [el.textContent || '', ...el.children.map(textOf)].join(' '); }
+function bookGarment() { return { ...oldGarment('g_book'), brand: 'Zimmermann', name: '秀款露背旗袍', purchasePrice: 1500, currency: 'CNY', archive: { year: '2020', season: 'resort', relation: 'runway_match', verification: 'pending', sourceUrl: 'Vogue Runway / 卖家提供', story: '找到这件衣服的故事', photos: [{ id: 'p_runway', kind: 'runway', caption: '秀场参考图', sourceUrl: 'https://example.com/runway' }, { id: 'p_detail', kind: 'detail', caption: '面料与标签', sourceUrl: '' }] }, photo_p_runway: PNG, photo_p_detail: PNG }; }
 
 test('the real edit handlers save, reopen, export and restore every record field without losing images', async () => {
   const records = [oldGarment('g_1'), oldGarment('g_2')], app = await start(records);
@@ -392,4 +397,55 @@ test('a cached image that becomes unreadable during local save is downloaded onc
   await until(() => app.elements['edit-dialog'].open === false || app.errors.length); assert.deepEqual(app.errors, []);
   assert.equal(app.memory.garments[0].archive.story, '保存时恢复缓存'); assert.equal(await app.memory.garments[0].image.text(), 'display');
   assert.equal(api.rawGets.filter(sha => sha === api.manifest().garments[0].assets.image.sha).length, 1);
+});
+test('the new navigation opens an independent index, preserving the original closet and its filters', async () => {
+  const records = [bookGarment(), { ...oldGarment('g_other'), brand: 'House of CB', name: '另一条裙子' }], app = await start(records), el = app.elements;
+  const oldCards = el['garment-grid'].children, before = structuredClone(records); openBook(app);
+  assert.equal(el.workspace.hidden, true); assert.equal(el['outfits-view'].hidden, true); assert.equal(el['book-view'].hidden, false); assert.equal(el['book-grid'].children.length, 2);
+  assert.equal(app.navigation.find(button => button.dataset.view === 'book').attributes['aria-current'], 'page');
+  assert.equal(el['garment-grid'].children, oldCards); assert.deepEqual(records, before); assert.equal(app.writes.length, 0);
+  el['book-search'].value = 'Zimmermann'; el['book-search'].fire('input'); assert.equal(el['book-grid'].children.length, 1); assert.equal(el.search.value, '');
+  el['book-brand'].value = 'brand:house of cb'; el['book-brand'].fire('change'); assert.equal(el['book-grid'].children.length, 0); assert.equal(el['book-no-results'].hidden, false);
+  el['book-reset'].fire('click'); assert.equal(el['book-grid'].children.length, 2);
+  el['book-filter'].value = 'runway'; el['book-filter'].fire('change'); assert.equal(el['book-grid'].children.length, 1); assert.doesNotMatch(textOf(el['book-grid']), /1,500/);
+  el['book-prices'].checked = true; el['book-prices'].fire('change'); assert.match(textOf(el['book-grid']), /1,500/);
+  app.navigation.find(button => button.dataset.view === 'closet').onclick(); assert.equal(el.workspace.hidden, false); assert.equal(el['book-view'].hidden, true); assert.equal(el['garment-grid'].children, oldCards); assert.deepEqual(app.errors, []);
+});
+test('the book opens every photo and provenance, edits shared records, exports cards and adds a garment to the existing board', async () => {
+  const records = [bookGarment()], app = await start(records), el = app.elements; openBook(app); el['book-grid'].children[0].fire('click'); await flush();
+  assert.equal(el['book-index'].hidden, true); assert.equal(el['book-record'].hidden, false); const text = textOf(el['book-record-body']);
+  for (const value of ['秀款露背旗袍', '2020', '待确认', '秀场参考图', '面料与标签', 'Vogue Runway / 卖家提供', '找到这件衣服的故事']) assert.ok(text.includes(value), value);
+  assert.doesNotMatch(text, /1,500/); assert.equal(el['archive-dialog'].open, undefined);
+  el['book-edit'].fire('click'); assert.equal(el['edit-dialog'].open, true); el['archive-story'].value = '补充后的共同故事'; el['edit-name'].value = '共同的新名称'; el['edit-form'].fire('submit'); await flush();
+  assert.deepEqual(app.errors, []); assert.equal(records[0].archive.story, '补充后的共同故事'); assert.equal(el['book-record'].hidden, false); assert.equal(el['archive-dialog'].open, undefined);
+  assert.match(textOf(el['book-record-body']), /共同的新名称/); assert.match(textOf(el['garment-grid']), /共同的新名称/);
+  el['book-export'].fire('click'); await until(() => app.downloads.length || app.errors.length); assert.deepEqual(app.errors, []);
+  assert.doesNotMatch(JSON.parse(await app.downloads[0].text()).text, /1,500/);
+  el['book-export-price'].checked = true; el['book-export'].fire('click'); await until(() => app.downloads.length === 2 || app.errors.length);
+  assert.match(JSON.parse(await app.downloads[1].text()).text, /1,500/);
+  el['book-style'].fire('click'); await flush(); assert.equal(el.workspace.hidden, false); assert.equal(el['book-view'].hidden, true); assert.equal(el['board-layers'].children.length, 1); assert.deepEqual(app.errors, []);
+  find(el['garment-grid'].children[0], 'garment-title').onclick(); assert.equal(el['archive-dialog'].open, true); assert.equal(el['archive-story-text'].textContent, '补充后的共同故事');
+});
+test('book edits retain unsaved text on storage failure and return to the book after retry', async () => {
+  const app = await start([bookGarment()], { failWrites: 1 }), el = app.elements; openBook(app); el['book-grid'].children[0].fire('click'); el['book-edit'].fire('click');
+  el['archive-story'].value = '失败后仍在这里'; el['edit-form'].fire('submit'); await flush(); assert.equal(el['edit-dialog'].open, true); assert.equal(el['archive-story'].value, '失败后仍在这里');
+  el['edit-form'].fire('submit'); await flush(); assert.equal(el['edit-dialog'].open, false); assert.equal(el['book-record'].hidden, false); assert.match(textOf(el['book-record-body']), /失败后仍在这里/); assert.equal(el['archive-dialog'].open, undefined);
+});
+test('the book uses fresh private cloud data, loads gallery photos and syncs edits without changing the old viewer', async () => {
+  const api = fixture(), g = bookGarment(); for (const field of C.imageFields(g)) g[field] = new Blob([field], { type: 'image/png' });
+  await connect(await start([g], { api })); const phone = await start([], { api }); await connect(phone); const el = phone.elements; openBook(phone); el['book-grid'].children[0].fire('click');
+  await until(() => phone.memory.garments[0].photo_p_detail); assert.deepEqual(phone.errors, []);
+  assert.equal(await phone.memory.garments[0].photo_p_runway.text(), 'photo_p_runway'); assert.match(el['book-sync-status'].textContent, /已同步/);
+  el['book-edit'].fire('click'); el['archive-story'].value = '从档案册同步的故事'; el['edit-form'].fire('submit'); await until(() => el['edit-dialog'].open === false || phone.errors.length);
+  phone.runSyncTimer(); await until(() => el['cloud-status'].textContent === '已同步，照片和档案保存在私有仓库' || phone.errors.length);
+  assert.deepEqual(phone.errors, []); assert.equal(api.manifest().garments[0].archive.story, '从档案册同步的故事'); assert.match(textOf(el['book-record-body']), /从档案册同步的故事/);
+});
+test('the book handles an empty collection, page turns, return to index and stable references without writes', async () => {
+  const empty = await start([]); openBook(empty); assert.equal(empty.elements['book-empty'].hidden, false); assert.equal(empty.elements['book-grid'].children.length, 0); assert.deepEqual(empty.errors, []);
+  const records = [bookGarment(), { ...oldGarment('g_z'), brand: 'Zzz', name: '<script>文字名称</script>' }], app = await start(records), el = app.elements;
+  const number = ArchiveBook.reference(records[0]); assert.equal(ArchiveBook.reference({ ...records[0], name: '修改名称' }), number);
+  openBook(app); el['book-grid'].children[0].fire('click'); assert.equal(el['book-previous'].disabled, true); assert.equal(el['book-next'].disabled, false);
+  el['book-next'].fire('click'); assert.match(textOf(el['book-record-body']), /<script>文字名称<\/script>/); assert.equal(el['book-next'].disabled, true);
+  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, true);
+  assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });

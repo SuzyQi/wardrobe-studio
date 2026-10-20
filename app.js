@@ -11,6 +11,7 @@
     view: 'closet', history: [], future: [], ready: false };
   const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
   let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
+  let archiveBook = null, editingFromBook = false;
   let draftChain = Promise.resolve(), sliderStart = null;
   const Cloud = window.WardrobeCloud, rawLocalWrite = DB.write.bind(DB);
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
@@ -79,6 +80,7 @@
       : cloud.message.includes('未完成') ? '同步未完成 · 本机记录保留，请在 GitHub 同步窗口重试'
       : cloud.saved.dirty ? (cloud.auto ? '本机已保存 · 等待自动同步至 GitHub' : '本机已保存 · 自动同步已关闭，请手动同步')
       : '已同步至 GitHub · 其他设备连接后可查看';
+    archiveBook?.setSync($('archive-sync-status').textContent);
     if (state.ready) updateStorageStatus();
   }
   const authorizationStores = [['device', 'localStorage', 'wardrobe-github-device'], ['session', 'sessionStorage', 'wardrobe-github-session']];
@@ -413,12 +415,14 @@
     if (items.length) {
       const tile = node('button', 'upload-tile'); tile.type = 'button'; tile.append(icon('plus'), node('span', '', '放进衣橱')); tile.onclick = pickFiles; grid.append(tile);
     }
+    if (state.view === 'book') archiveBook?.render(state.garments);
     $('remove-demo').hidden = !state.garments.some(g => g.demo); cleanupUrls();
   }
   function setView(value) {
-    state.view = value; $('workspace').hidden = value !== 'closet'; $('outfits-view').hidden = value !== 'outfits';
+    state.view = value; $('workspace').hidden = value !== 'closet'; $('outfits-view').hidden = value !== 'outfits'; $('book-view').hidden = value !== 'book';
     for (const b of document.querySelectorAll('[data-view]')) { b.classList.toggle('active', b.dataset.view === value); if (b.dataset.view === value) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
     if (value === 'outfits') renderOutfits();
+    if (value === 'book') archiveBook?.render(state.garments);
   }
   function layerStyle(el, l, g) {
     el.style.left = (l.x / C.WIDTH * 100) + '%'; el.style.top = (l.y / C.HEIGHT * 100) + '%';
@@ -587,6 +591,7 @@
   }
   function openEdit(id) {
     const g = garment(id); if (!g) return;
+    editingFromBook = false;
     if ($('archive-dialog').open) $('archive-dialog').close();
     editing = { ...g, ...C.garmentDetails(g) };
     $('edit-error').hidden = true; $('edit-error').textContent = '';
@@ -619,7 +624,10 @@
         if (hasArchive) value.archive = archive; else delete value.archive;
         await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g); savedId = value.id;
       });
-      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits(); openArchive(savedId); toast('档案已保存到本机。连接 GitHub 后会继续同步。');
+      const returnToBook = editingFromBook;
+      $('edit-dialog').close(); editing = null; renderCloset(); renderBoard(); renderOutfits();
+      if (returnToBook) archiveBook?.open(savedId); else openArchive(savedId);
+      toast('档案已保存到本机。连接 GitHub 后会继续同步。');
     } catch (error) {
       errorBox.textContent = error?.message || '本次保存未完成，请重试。'; errorBox.hidden = false;
       errorBox.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' }); throw error;
@@ -697,6 +705,10 @@
   async function exportArchive() {
     if (!viewed) return; const g = garment(viewed.id); if (!g) return;
     const includePrice = $('archive-export-price').checked;
+    return exportMemorial(g, includePrice);
+  }
+  async function exportMemorial(g, includePrice) {
+    if (!g) return;
     await work('正在制作藏品纪念卡…', async () => {
       if (document.fonts?.ready) await document.fonts.ready;
       const measureCanvas = I.canvas(1, 1), measureContext = measureCanvas.getContext('2d');
@@ -928,6 +940,11 @@
     if (!await confirmAction('移除所有示例衣服？', '示例衣服也会从搭配中移除，你自己上传的衣服会保留。', '移除示例')) return;
     await removeGarments(new Set(state.garments.filter(g => g.demo).map(g => g.id))); toast('示例衣服已移除。');
   });
+  archiveBook = window.WardrobeArchiveBook?.create({ document, showAsset,
+    onEdit: id => { openEdit(id); editingFromBook = true; },
+    onStyle: id => addLayer(id),
+    onExport: (id, includePrice) => exportMemorial(garment(id), includePrice).catch(report),
+    onUpload: pickFiles });
   bindBoard();
   try {
     await DB.open(); const results = await Promise.all([DB.read('garments'), DB.read('outfits'), DB.read('meta')]);

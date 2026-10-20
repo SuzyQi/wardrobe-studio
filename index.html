@@ -11,13 +11,15 @@
   <link rel="icon" href="./favicon.svg?v=20261020-home-icon" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261020-home-icon">
   <link rel="stylesheet" href="./styles.css?v=20261020-image-bytes">
+  <link rel="stylesheet" href="./archive-book.css?v=20261020-archive-book">
   <script src="./core.js?v=20261020-image-bytes" defer></script>
   <script src="./storage.js?v=20261020-image-bytes" defer></script>
   <script src="./images.js?v=20261020-image-bytes" defer></script>
   <script src="./demo.js?v=20261020-image-bytes" defer></script>
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
-  <script src="./app.js?v=20261020-image-bytes" defer></script>
+  <script src="./archive-book.js?v=20261020-archive-book" defer></script>
+  <script src="./app.js?v=20261020-archive-book" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -43,7 +45,7 @@
 <a class="skip-link" href="#workspace">跳到我的衣橱</a>
 <header class="site-header">
   <a class="brand" href="./" aria-label="衣橱间首页"><span class="brand-mark"><svg class="icon"><use href="#i-hanger"/></svg></span><span>衣橱间<small>WARDROBE STUDIO</small></span></a>
-  <nav class="main-nav" aria-label="页面"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button></nav>
+  <nav class="main-nav" aria-label="页面"><button class="nav-link active" data-view="closet" aria-current="page">我的衣橱</button><button class="nav-link" data-view="outfits">搭配手册 <span id="nav-outfit-count" class="nav-count">0</span></button><button class="nav-link" data-view="book">档案册</button></nav>
   <div class="header-actions"><button class="button ghost cloud-button" id="open-cloud" aria-label="GitHub 同步设置"><svg class="icon"><use href="#i-cloud"/></svg><span id="cloud-button-label">GitHub 同步</span></button><button class="button ghost backup-button" id="open-backup"><svg class="icon"><use href="#i-download"/></svg><span>备份</span></button><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg><span>添加衣服</span></button></div>
 </header>
 <main>
@@ -71,6 +73,21 @@
     </aside>
   </section>
   <section id="outfits-view" class="outfits-view" hidden><div class="section-heading"><div><p class="eyebrow">LOOKS TO KEEP</p><h2>我的搭配手册 <span id="outfit-count" class="count">0</span></h2></div><button class="button secondary" id="outfits-new"><svg class="icon"><use href="#i-plus"/></svg>搭一套新的</button></div><p class="outfits-intro">留住那些「这样穿很好看」的瞬间。</p><div id="outfit-grid" class="outfit-grid"></div><div id="outfits-empty" class="empty-state"><svg class="icon"><use href="#i-layers"/></svg><h3>第一套搭配，等你来搭</h3><p>选几件喜欢的单品，在画布里自由组合，再保存到这里。</p><button class="button primary" id="go-style">去搭配衣服 <svg class="icon"><use href="#i-arrow"/></svg></button></div></section>
+  <section id="book-view" class="book-view" aria-labelledby="book-title" hidden>
+    <div id="book-index" tabindex="-1">
+      <header class="book-heading"><div><p class="book-kicker">THE PERSONAL ARCHIVE / VOL. 01</p><h1 id="book-title">我的服装档案</h1><p class="book-intro">收藏、穿着与寻找的记录。</p></div><div class="book-volume"><strong id="book-total">00</strong><span>PIECES IN THE ARCHIVE</span></div></header>
+      <div class="book-controls"><label class="book-search"><svg class="icon"><use href="#i-search"/></svg><input id="book-search" type="search" placeholder="寻找一件衣服、一段故事…" aria-label="搜索档案册"></label><select id="book-brand" aria-label="档案册品牌"><option value="">全部品牌</option></select><select id="book-filter" aria-label="档案册资料筛选"><option value="all">全部档案</option><option value="runway">有秀场资料</option><option value="story">有收藏故事</option></select><label class="book-check"><input id="book-prices" type="checkbox">显示购入价格</label></div>
+      <p id="book-results" class="book-results" role="status"></p><div id="book-grid" class="book-grid"></div>
+      <div id="book-empty" class="book-empty" hidden><h2>从一件喜欢的衣服开始</h2><p>已有衣物会自动出现在这里，照片与资料共用。</p><button id="book-upload" class="button secondary">添加第一件衣服</button></div>
+      <div id="book-no-results" class="book-empty" hidden><h2>这次没有找到档案</h2><p>换一个关键词，或看看全部收藏。</p><button id="book-reset" class="book-text-button">显示全部档案</button></div>
+    </div>
+    <article id="book-record" aria-label="服装档案内页" tabindex="-1" hidden>
+      <div class="book-record-bar"><button id="book-back" class="book-text-button">← 档案索引</button><div class="book-pagination"><button id="book-previous">上一件</button><span id="book-page-number" class="book-page-number"></span><button id="book-next">下一件</button></div></div>
+      <div id="book-record-body" class="book-record-body"></div>
+      <footer class="book-record-footer"><div><label class="book-check"><input id="book-export-price" type="checkbox">纪念卡显示购入价格</label><p class="book-export-note">导出实物与首张秀场图（或附图）、收藏故事和资料来源。</p></div><div class="book-record-actions"><button id="book-edit" class="button secondary">补充档案</button><button id="book-export" class="button primary">导出纪念卡</button><button id="book-style" class="book-text-button">＋ 加入搭配</button></div></footer>
+      <p id="book-sync-status" class="book-sync" role="status"></p>
+    </article>
+  </section>
   <footer class="site-footer"><span><span class="status-dot"></span><span id="storage-status">正在打开本机衣橱…</span></span><button class="text-button" id="open-help">使用小贴士 <svg class="icon"><use href="#i-info"/></svg></button><span class="footer-tagline">Less scrolling. More wearing.</span></footer>
 </main>
 <input id="file-input" type="file" accept="image/png,image/jpeg,image/webp,image/avif" multiple hidden>
