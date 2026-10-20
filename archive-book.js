@@ -75,13 +75,21 @@
       grid.hidden = !items.length;
       for (const g of items) {
         const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.setAttribute('aria-label', '打开档案册：' + g.name);
-        const visual = node('span', 'book-index-photo'), img = node('img'); img.alt = g.name; visual.append(img); showAsset(img, g, 'thumb');
+        const visual = node('span', 'book-index-photo'), img = node('img'); img.alt = '实物：' + g.name; visual.append(img, node('span', 'book-print-caption', 'MY PIECE / 实物')); showAsset(img, g, 'thumb');
+        const photos = g.archive?.photos || [], photo = photos.find(p => p.kind === 'runway') || photos[0];
+        let referencePrint;
+        if (photo) {
+          referencePrint = node('span', 'book-index-reference'); const referenceImage = node('img'); referenceImage.alt = C.PHOTO_KINDS[photo.kind] + '：' + g.name;
+          referencePrint.append(referenceImage, node('span', 'book-print-caption', C.PHOTO_KINDS[photo.kind] + ' / REFERENCE')); showAsset(referenceImage, g, 'photo_' + photo.id);
+        }
         const text = node('span', 'book-index-label');
+        text.append(node('span', 'book-label-heading', 'PERSONAL COLLECTION'));
         text.append(node('span', 'book-index-brand', g.brand || '个人收藏'), node('span', 'book-index-name', g.name));
         text.append(node('span', 'book-index-series', series(g) || g.subcategory || C.categoryLabel(g.category)));
         const foot = node('span', 'book-index-foot'); foot.append(node('span', 'book-code', 'No. ' + reference(g)), node('span', 'book-index-mark', g.demo ? '示例' : g.archive?.verification === 'confirmed' && series(g) ? '资料已确认' : g.archive?.relation || g.archive?.photos?.some(p => p.kind === 'runway') ? '秀款资料待确认' : '打开档案 ↗'));
         text.append(foot); if (state.prices && C.formatPrice(g)) text.append(node('span', 'book-index-price', '实付 ' + C.formatPrice(g)));
-        card.append(visual, text); grid.append(card);
+        if (g.archive?.story) text.append(node('span', 'book-index-story', g.archive.story.slice(0, 65) + (g.archive.story.length > 65 ? '…' : '')));
+        card.append(visual); if (referencePrint) card.append(referencePrint); card.append(text); grid.append(card);
       }
     }
     function renderRecord() {

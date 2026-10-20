@@ -459,3 +459,13 @@ test('the collage cover uses actual reference photos, and every print opens its 
   const second = find(plain.elements['book-cover'], 'book-cover-print book-cover-secondary'); assert.match(textOf(second), /收录单品/); assert.doesNotMatch(textOf(second), /秀场/);
   second.fire('click'); assert.match(textOf(plain.elements['book-record-body']), /第二件/); assert.equal(plain.writes.length, 0); assert.deepEqual(app.errors, []); assert.deepEqual(plain.errors, []);
 });
+test('catalogue compositions show only their own photos and shared story, with no invented reference image', async () => {
+  const records = [bookGarment(), { ...oldGarment('g_no_reference'), name: '没有附图的单品', brand: 'Zzz' }], app = await start(records), el = app.elements;
+  const before = structuredClone(records); openBook(app);
+  const withReference = el['book-grid'].children.find(card => card.dataset.garmentId === 'g_book'), withoutReference = el['book-grid'].children.find(card => card.dataset.garmentId === 'g_no_reference');
+  assert.match(find(withReference, 'book-index-reference').querySelector('img').alt, /秀场图：秀款露背旗袍/);
+  assert.match(textOf(find(withReference, 'book-index-label')), /找到这件衣服的故事/);
+  assert.equal(find(withoutReference, 'book-index-reference'), undefined); assert.doesNotMatch(textOf(withoutReference), /REFERENCE|秀场/);
+  withReference.fire('click'); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/);
+  assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
+});
