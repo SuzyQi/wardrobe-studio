@@ -5,23 +5,24 @@
 .book-overview{min-width:0;scroll-margin-top:16px}.book-wall-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;padding:7px 0 26px}.book-wall-heading h2{font:24px/1.6 var(--serif);margin-top:8px;letter-spacing:.06em}.book-wall-heading .book-kicker{font-size:8px}
 .book-desk:has(.book-overview:not([hidden])){background:#fafaf8}
 .book-wall{min-width:0;padding-bottom:22px}
-/* Every garment is the lead of its own assemblage; nearby miniatures are separate records. */
+/* Each actual garment leads; only its own attached photographs appear beside it. */
 .book-wall{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:52px 46px;align-items:start;padding:8px 0 35px}
 .book-wall-sheet{display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1fr);gap:15px;align-items:start;min-width:0;margin:0;padding:0;position:relative}
 .book-wall-sheet:nth-child(even){margin-top:52px}
 .book-wall-piece{position:relative;display:block;min-width:0;width:100%;padding:0;text-align:left;background:transparent;border:0;border-radius:0}
 .book-wall-photo{position:relative;display:block;width:100%;height:380px;min-width:0;background:transparent}
 .book-wall-photo>img{display:block;width:100%;height:100%;object-fit:contain;padding:0;filter:none}
-.book-wall-piece[data-reference="true"] .book-wall-photo>img{width:91%;height:100%;object-position:top left}
-.book-wall-reference{position:absolute;display:flex;flex-direction:column;left:8%;top:27%;width:85%;height:64%;min-height:0;background:#fff;border:1px solid #d9dcd6;padding:6px;box-shadow:1px 3px 5px #14233d1c;transform:rotate(-.7deg)}
-.book-wall-reference>img{width:100%;height:0;min-height:0;flex:1;object-fit:contain;padding:0;background:#f9f9f6}.book-wall-reference-kind{display:block;flex-shrink:0;font:8px/1.8 var(--book-mono);color:var(--book-muted);padding:5px 2px 1px}
+.book-wall-sheet[data-photos="single"]{grid-template-columns:minmax(0,1fr)}
+.book-wall-sheet[data-photos="single"] .book-wall-piece{width:72%}
 .book-wall-note{display:block;min-width:0;margin:12px 0 0;padding:0 2px;background:transparent;box-shadow:none;border:0}
 .book-wall-brand{display:block;font:bold 12px/1.6 var(--book-mono);text-transform:uppercase;letter-spacing:-.025em;color:var(--book-ink);overflow-wrap:anywhere}
 .book-wall-name{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font:10px/1.8 var(--sans);color:#606872;margin-top:4px;overflow-wrap:anywhere}
 .book-wall-series{display:block;font:9px/1.8 var(--book-mono);color:var(--book-blue);margin-top:5px}.book-wall-price{display:block;font:10px/1.8 var(--book-mono);margin-top:5px;color:var(--book-muted)}
 .book-wall-satellites{display:flex;flex-direction:column;gap:17px;min-width:0;margin-top:36px;padding:11px 7px 13px;background:#f0f1ed}
 .book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:9px;background:transparent}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:57px}
-.book-wall-mini-heading{font:8px/1.6 var(--book-mono);color:#8a8f97;letter-spacing:.06em;text-align:center}
+.book-wall-satellites:not([data-count="1"]):not([data-count="2"]):not([data-count="3"]){display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:8px}
+.book-wall-mini:nth-child(2n){transform:translateY(10px) rotate(.8deg)}
+.book-wall-mini-photo{background:#fff;border:1px solid #e0e2df;padding:3px;box-shadow:1px 2px 3px #14233d0d}
 .book-wall-mini{display:block;min-width:0;width:100%;padding:0;background:transparent;border:0;border-radius:0;text-align:center}
 .book-wall-mini-photo{position:relative;display:block;height:78px;min-width:0;width:100%}.book-wall-mini-photo img{display:block;width:100%;height:100%;object-fit:contain}
 .book-wall-mini-name{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;font:8px/1.8 var(--book-mono);color:#767e89;margin-top:6px;overflow-wrap:anywhere}
@@ -30,5 +31,5 @@
 @media(min-width:1450px){.book-wall{gap:58px 60px}.book-wall-photo{height:420px}.book-wall-mini-photo{height:88px}.book-wall-satellites{gap:22px}}
 @media(max-width:1100px){.book-wall{grid-template-columns:minmax(0,1fr);max-width:760px;margin:0 auto;gap:45px}.book-wall-sheet:nth-child(even){margin-top:0}.book-wall-sheet{grid-template-columns:minmax(0,2.4fr) minmax(0,1fr);gap:25px}.book-wall-photo{height:460px}.book-wall-mini-photo{height:95px}.book-wall-satellites{gap:23px;margin-top:43px}.book-wall-brand{font-size:14px}.book-wall-name{font-size:11px}}
 @media(max-width:800px){.book-display-controls{gap:15px;margin-bottom:17px}.book-display-button{font-size:10px}.book-wall-heading{padding-bottom:22px}.book-wall-heading h2{font-size:23px}}
-@media(max-width:600px){.book-wall{gap:43px;padding-bottom:25px}.book-wall-sheet{grid-template-columns:minmax(0,2.5fr) minmax(0,1fr);gap:11px}.book-wall-photo{height:340px}.book-wall-reference{padding:4px;left:5%;width:91%;top:28%;height:62%}.book-wall-reference-kind{font-size:7px;padding:3px 1px 0}.book-wall-satellites{margin-top:35px;padding:9px 4px;gap:18px}.book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:20px}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:45px}.book-wall-mini-photo{height:65px}.book-wall-mini-heading,.book-wall-mini-name{font-size:7px}.book-wall-brand{font-size:11px}.book-wall-name{font-size:10px}.book-wall-series{font-size:8px}.book-wall-price{font-size:9px}.book-wall-note{margin-top:10px}}
+@media(max-width:600px){.book-wall{gap:43px;padding-bottom:25px}.book-wall-sheet{grid-template-columns:minmax(0,2.5fr) minmax(0,1fr);gap:11px}.book-wall-photo{height:340px}.book-wall-satellites{margin-top:35px;padding:9px 4px;gap:18px}.book-wall-sheet:nth-child(2n) .book-wall-satellites{margin-top:20px}.book-wall-sheet:nth-child(3n) .book-wall-satellites{margin-top:45px}.book-wall-mini-photo{height:65px}.book-wall-mini-name{font-size:7px}.book-wall-brand{font-size:11px}.book-wall-name{font-size:10px}.book-wall-series{font-size:8px}.book-wall-price{font-size:9px}.book-wall-note{margin-top:10px}}
 @media(max-width:380px){.book-wall-photo{height:300px}.book-wall-mini-photo{height:57px}.book-wall-heading h2{font-size:20px}.book-wall-heading .book-kicker{font-size:7px}.book-display-controls{gap:11px}.book-display-button{font-size:9px}}

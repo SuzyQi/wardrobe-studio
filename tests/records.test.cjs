@@ -543,8 +543,9 @@ test('the default collection wall contains every garment once and connects its o
   assert.equal(el['book-overview'].hidden, false); assert.equal(el['book-record'].hidden, true); assert.equal(el['book-index'].hidden, true);
   assert.equal(pieces().length, 19); assert.equal(new Set(pieces().map(p => p.dataset.garmentId)).size, 19); assert.match(el['book-wall-count'].textContent, /19 件收藏/);
   const zimmermann = pieces().find(p => p.dataset.garmentId === 'g_book');
-  assert.match(find(zimmermann, 'book-wall-photo').children[0].alt, /秀场图：秀款露背旗袍/);
-  assert.match(find(zimmermann, 'book-wall-reference').querySelector('img').alt, /实物：秀款露背旗袍/);
+  assert.equal(find(zimmermann, 'book-wall-photo').children[0].alt, '实物：秀款露背旗袍');
+  const ownPhotos = find(el['book-wall'].children.find(sheet => sheet.dataset.garmentId === 'g_book'), 'book-wall-satellites');
+  assert.deepEqual(ownPhotos.children.map(mini => mini.querySelector('img').alt), ['秀场图：秀款露背旗袍', '实物细节：秀款露背旗袍']);
   assert.equal(el['book-wall'].children.length, 19, 'every garment gets its own complete collage');
   for (const p of pieces().filter(p => p.dataset.garmentId !== 'g_book')) assert.equal(find(p, 'book-wall-reference'), undefined);
   assert.doesNotMatch(textOf(el['book-wall']), /1,500/); zimmermann.fire('click'); assert.equal(el['book-record'].hidden, false); assert.equal(el['book-overview'].hidden, true);
@@ -556,17 +557,34 @@ test('the default collection wall contains every garment once and connects its o
   el['book-reset'].fire('click'); assert.equal(pieces().length, 19); assert.equal(el['book-show-wall'].attributes['aria-pressed'], 'true'); assert.deepEqual(app.errors, []);
 });
 
-test('each collage has its own garment as lead and small other-piece links open their actual archives', async () => {
-  const records = [bookGarment(), { ...oldGarment('g_bag'), category: 'bags', brand: 'Celine', name: '自己的包' }, { ...oldGarment('g_shoes'), category: 'shoes', brand: 'Tabi', name: '自己的鞋' }], before = structuredClone(records), app = await start(records), el = app.elements;
+test('each collage leads with its actual garment, uses only its own attachments and leaves unillustrated garments alone', async () => {
+  const dress = bookGarment();
+  dress.archive.photos.push(...Array.from({ length: 4 }, (_, i) => ({ id: 'p_extra_' + i, kind: 'reference', caption: '本件参考 ' + i, sourceUrl: '' })));
+  for (const p of dress.archive.photos) dress['photo_' + p.id] = PNG;
+  const records = [dress, { ...oldGarment('g_bag'), category: 'bags', brand: 'Celine', name: '自己的包' }, { ...oldGarment('g_shoes'), category: 'shoes', brand: 'Tabi', name: '自己的鞋' }];
+  const before = structuredClone(records), app = await start(records), el = app.elements;
   app.navigation.find(button => button.dataset.view === 'book').onclick();
   assert.equal(el['book-wall'].children.length, 3);
   for (const sheet of el['book-wall'].children) {
-    const heroes = sheet.children.filter(child => child.dataset.role === 'hero'); assert.equal(heroes.length, 1); assert.equal(heroes[0].dataset.garmentId, sheet.dataset.garmentId);
-    const minis = find(sheet, 'book-wall-satellites').children.filter(child => child.className === 'book-wall-mini');
-    assert.ok(minis.length > 0); for (const mini of minis) { assert.notEqual(mini.dataset.garmentId, sheet.dataset.garmentId); assert.match(mini.querySelector('img').alt, /^其他藏品：/); }
+    const g = records.find(item => item.id === sheet.dataset.garmentId);
+    const heroes = sheet.children.filter(child => child.dataset.role === 'hero'); assert.equal(heroes.length, 1); assert.equal(heroes[0].dataset.garmentId, g.id);
+    assert.equal(find(heroes[0], 'book-wall-photo').querySelector('img').alt, '实物：' + g.name);
+    const satellites = find(sheet, 'book-wall-satellites');
+    if (!g.archive?.photos.length) { assert.equal(satellites, undefined); assert.equal(sheet.dataset.photos, 'single'); continue; }
+    assert.equal(satellites.children.length, g.archive.photos.length);
+    for (const mini of satellites.children) {
+      assert.equal(mini.dataset.garmentId, g.id);
+      const photo = g.archive.photos.find(p => p.id === mini.dataset.photoId); assert.ok(photo);
+      assert.equal(mini.querySelector('img').alt, C.PHOTO_KINDS[photo.kind] + '：' + g.name);
+      mini.fire('click'); assert.equal(el['book-photo-viewer'].open, true);
+      assert.equal(el['book-photo-image'].alt, C.PHOTO_KINDS[photo.kind] + '：' + g.name);
+      assert.ok(textOf(el['book-photo-note']).includes(photo.caption));
+      el['book-photo-close'].fire('click'); assert.equal(el['book-photo-viewer'].open, false);
+      assert.equal(el['book-overview'].hidden, false);
+    }
   }
-  const dress = el['book-wall'].children.find(sheet => sheet.dataset.garmentId === 'g_book');
-  const mini = find(dress, 'book-wall-satellites').children.find(child => child.className === 'book-wall-mini'); const target = records.find(g => g.id === mini.dataset.garmentId);
-  mini.fire('click'); assert.equal(el['book-record'].hidden, false); assert.ok(textOf(el['book-record-body']).includes(target.name)); assert.equal(el['book-record-body'].dataset.garmentId, target.id);
-  el['book-back'].fire('click'); assert.equal(el['book-wall'].children.length, 3); assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
+  const hero = el['book-wall'].children.find(sheet => sheet.dataset.garmentId === dress.id).children[0];
+  hero.fire('click'); assert.equal(el['book-record-body'].dataset.garmentId, dress.id);
+  el['book-back'].fire('click'); assert.equal(el['book-wall'].children.length, 3);
+  assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
 });

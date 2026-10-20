@@ -112,32 +112,29 @@
         sheet.setAttribute('aria-label', '收藏拼贴：' + (g.brand ? g.brand + ' / ' : '') + g.name);
         const piece = button('book-wall-piece', undefined, () => open(g.id)); piece.dataset.garmentId = g.id; piece.dataset.role = 'hero';
         piece.setAttribute('aria-label', '打开档案：' + (g.brand ? g.brand + ' / ' : '') + g.name);
-        const attached = g.archive?.photos || [], attachedPhoto = attached.find(p => p.kind === 'runway') || attached.find(p => p.kind === 'worn') || attached[0];
+        const attached = g.archive?.photos || [];
+        sheet.dataset.photos = attached.length ? 'attached' : 'single';
         const photo = node('span', 'book-wall-photo'), img = node('img');
-        img.alt = (attachedPhoto ? C.PHOTO_KINDS[attachedPhoto.kind] : '实物') + '：' + g.name;
-        photo.append(img); showAsset(img, g, attachedPhoto ? 'photo_' + attachedPhoto.id : 'thumb');
-        if (attachedPhoto) {
-          const inset = node('span', 'book-wall-reference'), actualImage = node('img'); actualImage.alt = '实物：' + g.name;
-          inset.append(actualImage, node('span', 'book-wall-reference-kind', '实物')); showAsset(actualImage, g, 'thumb'); photo.append(inset); piece.dataset.reference = 'true';
-        }
+        img.alt = '实物：' + g.name;
+        photo.append(img); showAsset(img, g, 'thumb');
         const note = node('span', 'book-wall-note');
         note.append(node('span', 'book-wall-brand', g.brand || g.name));
         if (g.brand) note.append(node('span', 'book-wall-name', g.name));
         if (series(g)) note.append(node('span', 'book-wall-series', series(g)));
         if (state.prices && C.formatPrice(g)) note.append(node('span', 'book-wall-price', '实付 ' + C.formatPrice(g)));
         piece.append(photo, note); sheet.append(piece);
-        const others = items.filter(item => item.id !== g.id), accessories = others.filter(item => ['shoes', 'bags', 'accessories'].includes(item.category));
-        const pool = accessories.length ? accessories : others, offset = pool.length ? n % pool.length : 0;
-        const companions = [...pool.slice(offset), ...pool.slice(0, offset)].slice(0, 3);
-        if (companions.length) {
-          const satellites = node('div', 'book-wall-satellites'); satellites.append(node('p', 'book-wall-mini-heading', '其他藏品'));
-          for (const other of companions) {
-            const mini = button('book-wall-mini', undefined, () => open(other.id)); mini.dataset.garmentId = other.id;
-            mini.setAttribute('aria-label', '查看其他藏品：' + (other.brand ? other.brand + ' / ' : '') + other.name);
-            const visual = node('span', 'book-wall-mini-photo'), smallImage = node('img'); smallImage.alt = '其他藏品：' + other.name;
-            visual.append(smallImage); showAsset(smallImage, other, 'thumb');
-            const label = node('span', 'book-wall-mini-name', other.brand || other.name); label.title = other.name;
-            mini.append(visual, label); satellites.append(mini);
+        if (attached.length) {
+          const satellites = node('div', 'book-wall-satellites');
+          satellites.dataset.count = String(attached.length);
+          for (const attachment of attached) {
+            const label = C.PHOTO_KINDS[attachment.kind], field = 'photo_' + attachment.id;
+            const mini = button('book-wall-mini', undefined, () => expandPhoto(g, field, label, attachment.caption, attachment.sourceUrl));
+            mini.dataset.garmentId = g.id; mini.dataset.photoId = attachment.id;
+            mini.setAttribute('aria-label', '放大查看' + label + '：' + g.name);
+            const visual = node('span', 'book-wall-mini-photo'), smallImage = node('img'); smallImage.alt = label + '：' + g.name;
+            visual.append(smallImage); showAsset(smallImage, g, field);
+            const caption = node('span', 'book-wall-mini-name', label); caption.title = attachment.caption || label;
+            mini.append(visual, caption); satellites.append(mini);
           }
           sheet.append(satellites);
         }
