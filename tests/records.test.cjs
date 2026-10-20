@@ -488,8 +488,9 @@ test('reading layouts adapt to available photographs without inventing history o
   el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-collage').dataset.layout, 'study');
   assert.match(textOf(el['book-record-body']), /面料与标签/);
   el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-collage').dataset.layout, 'comparison');
-  const inserts = find(el['book-record-body'], 'book-collage-details'), gallery = find(el['book-record-body'], 'book-detail-gallery');
-  assert.equal(inserts.children.length, 2); assert.equal(gallery.children.length, 1);
+  const firstPage = find(el['book-record-body'], 'book-stage');
+  const continuation = el['book-record-body'].children.find(child => child.className === 'book-stage');
+  assert.equal(firstPage.dataset.count, '3'); assert.equal(continuation.dataset.count, '2'); assert.equal(continuation.dataset.page, '2');
   function imageCount(parent) { return (parent.tagName === 'IMG' ? 1 : 0) + parent.children.reduce((sum, child) => sum + imageCount(child), 0); }
   assert.equal(imageCount(el['book-record-body']), 5, 'main image plus every attachment appears exactly once');
   for (const text of ['面料与标签', '细节 2', '细节 3', '找到这件衣服的故事', '待确认']) assert.match(textOf(el['book-record-body']), new RegExp(text));
@@ -502,4 +503,17 @@ test('editing a filtered item keeps its collage selected after its name no longe
   el['book-edit'].fire('click'); el['edit-name'].value = '改名后的藏品'; el['edit-form'].fire('submit'); await flush();
   assert.match(textOf(el['book-record-body']), /改名后的藏品/); assert.equal(el['book-search'].value, ''); assert.equal(el['book-grid'].children.length, 2);
   const active = el['book-grid'].children.filter(card => card.dataset.selected === 'true'); assert.equal(active.length, 1); assert.equal(active[0].dataset.garmentId, 'g_book'); assert.equal(el['book-index'].hidden, false); assert.deepEqual(app.errors, []);
+});
+
+test('layered photographs open unobstructed with their own full caption and source, without changing the archive', async () => {
+  const g = bookGarment(); g.archive.photos[0].caption = '完整秀场图注 '.repeat(24).trim();
+  const records = [g], before = structuredClone(records), app = await start(records), el = app.elements; openBook(app);
+  const foreground = find(el['book-record-body'], 'book-plate book-layer-front'); foreground.querySelector('button').fire('click');
+  assert.equal(el['book-photo-viewer'].open, true); assert.match(el['book-photo-image'].alt, /秀场图：秀款露背旗袍/);
+  assert.match(el['book-photo-title'].textContent, /秀场图/); assert.ok(textOf(el['book-photo-note']).includes(g.archive.photos[0].caption));
+  assert.equal(el['book-photo-note'].querySelector('a').href, 'https://example.com/runway');
+  el['book-photo-close'].fire('click'); assert.equal(el['book-photo-viewer'].open, false);
+  const main = find(el['book-record-body'], 'book-plate book-layer-base'); main.querySelector('button').fire('click');
+  assert.match(el['book-photo-image'].alt, /实物：秀款露背旗袍/); assert.equal(el['book-photo-note'].querySelector('a'), null);
+  el['book-photo-close'].fire('click'); assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
 });

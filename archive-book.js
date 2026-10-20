@@ -24,13 +24,32 @@
       if (!href.startsWith('https://')) { parent.append(node('p', 'book-source-note', value)); return; }
       const a = node('a', 'book-source', '资料来源 ↗'); a.href = href; a.target = '_blank'; a.rel = 'noopener noreferrer'; parent.append(a);
     }
-    function image(g, field, label, caption = '', sourceUrl = '', lead = false) {
-      const figure = node('figure', 'book-plate' + (lead ? ' book-plate-lead' : ''));
+    function expandPhoto(g, field, label, caption, sourceUrl) {
+      const dialog = $('book-photo-viewer');
+      $('book-photo-title').textContent = label + ' / ' + g.name;
+      const note = $('book-photo-note'); note.replaceChildren();
+      if (caption) note.append(node('p', 'book-caption', caption)); source(note, sourceUrl);
+      $('book-photo-image').alt = label + '：' + g.name;
+      dialog.showModal(); showAsset($('book-photo-image'), g, field);
+    }
+    function image(g, field, label, caption = '', sourceUrl = '') {
+      const figure = node('figure', 'book-plate');
       figure.dataset.kind = field.startsWith('photo_') ? g.archive?.photos?.find(p => 'photo_' + p.id === field)?.kind || 'reference' : 'garment';
-      const mat = node('div', 'book-picture'), img = node('img'); img.alt = label + '：' + g.name; mat.append(img); showAsset(img, g, field);
+      const mat = button('book-picture', undefined, () => expandPhoto(g, field, label, caption, sourceUrl)), img = node('img');
+      mat.setAttribute('aria-label', '放大查看' + label + '：' + g.name); img.alt = label + '：' + g.name; mat.append(img); showAsset(img, g, field);
       const figcaption = node('figcaption'); figcaption.append(node('span', 'book-type', label));
-      if (caption) figcaption.append(node('p', 'book-caption', caption)); source(figcaption, sourceUrl);
+      if (caption) { const text = node('p', 'book-caption', caption); text.title = caption; figcaption.append(text); } source(figcaption, sourceUrl);
       figure.append(mat, figcaption); return figure;
+    }
+    function stage(g, entries, page = 1) {
+      const sheet = node('div', 'book-stage'); sheet.dataset.count = String(entries.length); sheet.dataset.page = String(page);
+      sheet.setAttribute('role', 'group'); sheet.setAttribute('aria-label', '照片拼贴，第 ' + page + ' 页');
+      for (let n = 0; n < entries.length; n++) {
+        const e = entries[n], print = image(g, e.field, e.label, e.caption, e.sourceUrl);
+        print.className += ' book-layer-' + ['base', 'front', 'insert'][n]; sheet.append(print);
+      }
+      const label = node('div', 'book-fabric-label', g.brand || g.name); label.setAttribute('aria-hidden', 'true'); sheet.append(label);
+      const note = node('p', 'book-stage-number', 'No. ' + reference(g) + ' / ' + String(page).padStart(2, '0')); sheet.append(note); return sheet;
     }
     function facts(section, entries) {
       const dl = node('dl', 'book-facts');
@@ -85,11 +104,9 @@
       if (series(g)) head.append(node('p', 'book-record-series', series(g)));
       const photos = a.photos || [], first = photos.find(p => p.kind === 'runway') || photos[0];
       const collage = node('div', 'book-collage'); collage.dataset.layout = !first ? 'single' : first.kind === 'runway' ? 'comparison' : 'study';
-      const main = image(g, 'image', '01 / 实物', [g.color, g.size].filter(Boolean).join(' · ')); main.className += ' book-collage-main';
-      collage.append(main, head);
-      if (first) {
-        const reference = image(g, 'photo_' + first.id, '02 / ' + C.PHOTO_KINDS[first.kind], first.caption, first.sourceUrl); reference.className += ' book-collage-reference'; collage.append(reference);
-      } else main.append(button('book-text-button book-add-reference', '＋ 添加秀场、细节或穿着照片', () => onEdit(g.id)));
+      const remaining = photos.filter(p => p !== first);
+      const entries = [{ field: 'image', label: '实物', caption: [g.color, g.size].filter(Boolean).join(' · '), sourceUrl: '' }, ...[first, ...remaining].filter(Boolean).map(p => ({ field: 'photo_' + p.id, label: C.PHOTO_KINDS[p.kind], caption: p.caption, sourceUrl: p.sourceUrl }))];
+      collage.append(stage(g, entries.slice(0, 3)), head);
       const collection = chapter('SOURCE NOTES', '系列与来历'); collection.className += ' book-collection-sheet';
       const hasSeries = ['year', 'season', 'collection', 'look', 'relation', 'sourceUrl'].some(field => a[field]) || photos.some(p => p.kind === 'runway');
       facts(collection, [['年份', a.year], ['季节', a.season ? C.SEASONS[a.season] : ''], ['系列', a.collection], ['Look', a.look], ['与秀场的关系', a.relation ? C.RELATIONS[a.relation] : ''], ['资料状态', hasSeries ? (a.verification === 'confirmed' ? '已确认' : '待确认') : '尚未记录']]); source(collection, a.sourceUrl);
@@ -97,16 +114,10 @@
       if (a.story) story.append(node('p', 'book-story', a.story));
       else story.append(button('book-text-button', '写下这件衣服的故事 ↗', () => onEdit(g.id)));
       collage.append(story, collection);
-      const remaining = photos.filter(p => p !== first), inserts = remaining.slice(0, 2);
-      if (inserts.length) {
-        const details = node('div', 'book-collage-details'); details.dataset.count = String(inserts.length);
-        for (const p of inserts) details.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); collage.append(details);
-      }
+      if (!first) story.append(button('book-text-button book-add-reference', '＋ 添加秀场、细节或穿着照片', () => onEdit(g.id)));
       body.append(collage);
-      if (remaining.length > 2) {
-        const details = chapter('CONTACT SHEET', '更多照片'), gallery = node('div', 'book-detail-gallery');
-        for (const p of remaining.slice(2)) gallery.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); details.append(gallery); body.append(details);
-      }
+      for (let n = 3; n < entries.length; n += 3) body.append(stage(g, entries.slice(n, n + 3), n / 3 + 1));
+      body.append(node('p', 'book-photo-hint', '点击照片可放大查看完整图片、图注与来源。'));
       const purchase = node('details', 'book-inventory'); purchase.open = !!inventoryOpen; purchase.append(node('summary', '', '单品与购入记录'));
       facts(purchase, [['分类', g.subcategory || C.categoryLabel(g.category)], ['配色', g.color], ['尺码', g.size], ['款式', g.style], ['图案', g.pattern], ['购入日期', g.purchaseDate], ['购买渠道', g.purchaseSource], ['全新 / 二手', C.PURCHASE_CONDITIONS[g.purchaseCondition]], ['购入方式', C.PURCHASE_TYPES[g.purchaseType]], ['实付', state.prices ? C.formatPrice(g) : ''], ['原价', state.prices ? C.formatPrice(g, 'originalPrice') : '']]);
       if (g.notes) purchase.append(node('p', 'book-notes', g.notes)); body.append(purchase);
@@ -135,6 +146,7 @@
     $('book-style').onclick = () => { if (state.selected) onStyle(state.selected); };
     $('book-export').onclick = () => { if (state.selected) onExport(state.selected, !!$('book-export-price').checked); };
     $('book-upload').onclick = onUpload;
+    $('book-photo-close').onclick = () => $('book-photo-viewer').close();
     $('book-record').hidden = true;
     return { render, open, setSync: text => { $('book-sync-status').textContent = text; } };
   }

@@ -11,15 +11,15 @@
   <link rel="icon" href="./favicon.svg?v=20261020-home-icon" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261020-home-icon">
   <link rel="stylesheet" href="./styles.css?v=20261020-image-bytes">
-  <link rel="stylesheet" href="./archive-book.css?v=20261020-sidebar-collage">
-  <link rel="stylesheet" href="./archive-index.css?v=20261020-sidebar-collage">
+  <link rel="stylesheet" href="./archive-book.css?v=20261020-layered-pages">
+  <link rel="stylesheet" href="./archive-index.css?v=20261020-layered-pages">
   <script src="./core.js?v=20261020-image-bytes" defer></script>
   <script src="./storage.js?v=20261020-image-bytes" defer></script>
   <script src="./images.js?v=20261020-image-bytes" defer></script>
   <script src="./demo.js?v=20261020-image-bytes" defer></script>
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
-  <script src="./archive-book.js?v=20261020-sidebar-collage" defer></script>
+  <script src="./archive-book.js?v=20261020-layered-pages" defer></script>
   <script src="./app.js?v=20261020-archive-book" defer></script>
 </head>
 <body>
@@ -93,6 +93,10 @@
         <div id="book-no-results" class="book-empty" hidden><h2>这次没有找到档案</h2><p>换一个关键词，或看看全部收藏。</p><button id="book-reset" class="book-text-button">显示全部档案</button></div>
       </div>
     </div>
+    <dialog id="book-photo-viewer" class="book-photo-dialog" aria-labelledby="book-photo-title">
+      <header class="book-photo-toolbar"><h2 id="book-photo-title">照片</h2><button id="book-photo-close" class="book-text-button" aria-label="关闭放大照片">关闭 ×</button></header>
+      <div class="book-photo-full book-picture"><img id="book-photo-image" alt=""></div><div id="book-photo-note" class="book-photo-note"></div>
+    </dialog>
   </section>
   <footer class="site-footer"><span><span class="status-dot"></span><span id="storage-status">正在打开本机衣橱…</span></span><button class="text-button" id="open-help">使用小贴士 <svg class="icon"><use href="#i-info"/></svg></button><span class="footer-tagline">Less scrolling. More wearing.</span></footer>
 </main>
