@@ -11,15 +11,16 @@
   <link rel="icon" href="./favicon.svg?v=20261020-home-icon" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261020-home-icon">
   <link rel="stylesheet" href="./styles.css?v=20261020-image-bytes">
-  <link rel="stylesheet" href="./archive-book.css?v=20261020-fold-directory">
-  <link rel="stylesheet" href="./archive-index.css?v=20261020-fold-directory">
+  <link rel="stylesheet" href="./archive-book.css?v=20261020-collection-wall">
+  <link rel="stylesheet" href="./archive-index.css?v=20261020-collection-wall">
+<link rel="stylesheet" href="./archive-wall.css?v=20261020-collection-wall">
   <script src="./core.js?v=20261020-image-bytes" defer></script>
   <script src="./storage.js?v=20261020-image-bytes" defer></script>
   <script src="./images.js?v=20261020-image-bytes" defer></script>
   <script src="./demo.js?v=20261020-image-bytes" defer></script>
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
-  <script src="./archive-book.js?v=20261020-fold-directory" defer></script>
+  <script src="./archive-book.js?v=20261020-collection-wall" defer></script>
   <script src="./app.js?v=20261020-archive-book" defer></script>
 </head>
 <body>
@@ -84,8 +85,10 @@
         <nav id="book-grid" class="book-grid" aria-label="选择一份服装档案"></nav>
       </aside>
       <div class="book-desk">
+        <div class="book-display-controls" aria-label="档案册展示方式"><button id="book-show-wall" class="book-display-button" aria-pressed="true">全部收藏 · 拼贴总览</button><button id="book-show-record" class="book-display-button" aria-pressed="false">单件档案</button></div>
+        <section id="book-overview" class="book-overview" aria-labelledby="book-wall-title" tabindex="-1"><header class="book-wall-heading"><div><p class="book-kicker">THE COLLECTION / AN ONGOING ASSEMBLAGE</p><h2 id="book-wall-title">我的收藏拼贴</h2></div><p id="book-wall-count" class="book-results" role="status"></p></header><div id="book-wall" class="book-wall"></div></section>
         <article id="book-record" aria-label="服装档案拼贴" tabindex="-1" hidden>
-          <div class="book-record-bar"><button id="book-back" class="book-text-button">← 收录目录</button><div class="book-pagination"><button id="book-previous">上一件</button><span id="book-page-number" class="book-page-number"></span><button id="book-next">下一件</button></div></div>
+          <div class="book-record-bar"><button id="book-back" class="book-text-button">← 全部收藏</button><div class="book-pagination"><button id="book-previous">上一件</button><span id="book-page-number" class="book-page-number"></span><button id="book-next">下一件</button></div></div>
           <div id="book-record-body" class="book-record-body"></div>
           <footer class="book-record-footer"><div><label class="book-check"><input id="book-export-price" type="checkbox">纪念卡显示购入价格</label><p class="book-export-note">导出实物、参考照片与收藏记录。</p></div><div class="book-record-actions"><button id="book-edit" class="button secondary">补充档案</button><button id="book-export" class="button primary">导出纪念卡</button><button id="book-style" class="book-text-button">＋ 加入搭配</button></div></footer>
           <p id="book-sync-status" class="book-sync" role="status"></p>

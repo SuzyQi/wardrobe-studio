@@ -67,7 +67,7 @@ async function start(records, options = {}) {
 }
 function find(parent, className) { for (const child of parent.children) { if (child.className === className) return child; const nested = find(child, className); if (nested) return nested; } }
 function openRecord(app, index = 0) { find(app.elements['garment-grid'].children[index], 'icon-button card-edit').onclick(); }
-function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); if (app.elements['book-index'].hidden) app.elements['book-directory-toggle'].fire('click'); }
+function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); if (app.elements['book-index'].hidden) app.elements['book-directory-toggle'].fire('click'); if (!app.elements['book-show-record'].disabled) app.elements['book-show-record'].fire('click'); }
 function textOf(el) { return [el.textContent || '', ...el.children.map(textOf)].join(' '); }
 function bookGarment() { return { ...oldGarment('g_book'), brand: 'Zimmermann', name: '秀款露背旗袍', purchasePrice: 1500, currency: 'CNY', archive: { year: '2020', season: 'resort', relation: 'runway_match', verification: 'pending', sourceUrl: 'Vogue Runway / 卖家提供', story: '找到这件衣服的故事', photos: [{ id: 'p_runway', kind: 'runway', caption: '秀场参考图', sourceUrl: 'https://example.com/runway' }, { id: 'p_detail', kind: 'detail', caption: '面料与标签', sourceUrl: '' }] }, photo_p_runway: PNG, photo_p_detail: PNG }; }
 
@@ -446,7 +446,7 @@ test('the book handles an empty collection, page turns, return to index and stab
   const number = ArchiveBook.reference(records[0]); assert.equal(ArchiveBook.reference({ ...records[0], name: '修改名称' }), number);
   openBook(app); el['book-grid'].children[0].fire('click'); assert.equal(el['book-previous'].disabled, true); assert.equal(el['book-next'].disabled, false);
   el['book-next'].fire('click'); assert.match(textOf(el['book-record-body']), /<script>文字名称<\/script>/); assert.equal(el['book-next'].disabled, true);
-  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, false);
+  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, true); assert.equal(el['book-overview'].hidden, false);
   assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });
 test('a persistent vertical index opens the collage immediately, highlights selection and handles an empty filter', async () => {
@@ -521,15 +521,35 @@ test('layered photographs open unobstructed with their own full caption and sour
 test('the archive directory folds left by default and preserves the active photo page, filters and prices when toggled', async () => {
   const records = [bookGarment()], app = await start(records), el = app.elements;
   app.navigation.find(button => button.dataset.view === 'book').onclick();
-  assert.equal(el['book-index'].hidden, true); assert.equal(el['book-record'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'false');
+  assert.equal(el['book-index'].hidden, true); assert.equal(el['book-overview'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'false');
+  el['book-show-record'].fire('click'); assert.equal(el['book-record'].hidden, false);
   const body = el['book-record-body'].children; el['book-export-price'].checked = true;
   el['book-directory-toggle'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-shell'].dataset.directory, 'open');
   assert.equal(el['book-record-body'].children, body); assert.equal(el['book-export-price'].checked, true);
   el['book-search'].value = 'Zimmermann'; el['book-search'].fire('input');
   el['book-directory-toggle'].fire('click'); assert.equal(el['book-index'].hidden, true);
   el['book-next'].fire('click'); assert.equal(el['book-index'].hidden, true);
-  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'true');
+  el['book-directory-toggle'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-directory-toggle'].attributes['aria-expanded'], 'true');
   assert.equal(el['book-search'].value, 'Zimmermann'); assert.equal(el['book-grid'].children[0].dataset.selected, 'true');
   el['book-directory-toggle'].fire('click'); app.navigation.find(button => button.dataset.view === 'closet').onclick(); app.navigation.find(button => button.dataset.view === 'book').onclick();
   assert.equal(el['book-index'].hidden, true); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/); assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
+});
+
+test('the default collection wall contains every garment once and connects its own reference, filters and shared editor', async () => {
+  const records = [bookGarment(), ...Array.from({ length: 18 }, (_, i) => ({ ...oldGarment('g_wall_' + i), name: '收藏单品 ' + i, brand: i % 2 ? 'House of CB' : 'Zzz' }))];
+  const app = await start(records), el = app.elements;
+  app.navigation.find(button => button.dataset.view === 'book').onclick();
+  const pieces = () => el['book-wall'].children.flatMap(sheet => sheet.children);
+  assert.equal(el['book-overview'].hidden, false); assert.equal(el['book-record'].hidden, true); assert.equal(el['book-index'].hidden, true);
+  assert.equal(pieces().length, 19); assert.equal(new Set(pieces().map(p => p.dataset.garmentId)).size, 19); assert.match(el['book-wall-count'].textContent, /19 件收藏/);
+  const zimmermann = pieces().find(p => p.dataset.garmentId === 'g_book');
+  assert.match(find(zimmermann, 'book-wall-reference').querySelector('img').alt, /秀场图：秀款露背旗袍/);
+  for (const p of pieces().filter(p => p.dataset.garmentId !== 'g_book')) assert.equal(find(p, 'book-wall-reference'), undefined);
+  assert.doesNotMatch(textOf(el['book-wall']), /1,500/); zimmermann.fire('click'); assert.equal(el['book-record'].hidden, false); assert.equal(el['book-overview'].hidden, true);
+  el['book-edit'].fire('click'); el['edit-name'].value = '拼贴里修改的藏品'; el['edit-form'].fire('submit'); await flush();
+  el['book-back'].fire('click'); assert.equal(el['book-overview'].hidden, false); assert.equal(pieces().length, 19); assert.match(textOf(el['book-wall']), /拼贴里修改的藏品/);
+  el['book-directory-toggle'].fire('click'); el['book-brand'].value = 'brand:zimmermann'; el['book-brand'].fire('change'); assert.equal(pieces().length, 1);
+  el['book-prices'].checked = true; el['book-prices'].fire('change'); assert.match(textOf(el['book-wall']), /1,500/);
+  el['book-search'].value = '找不到'; el['book-search'].fire('input'); assert.equal(el['book-overview'].hidden, true); assert.equal(el['book-record'].hidden, true); assert.equal(el['book-no-results'].hidden, false); assert.equal(pieces().length, 0);
+  el['book-reset'].fire('click'); assert.equal(pieces().length, 19); assert.equal(el['book-show-wall'].attributes['aria-pressed'], 'true'); assert.deepEqual(app.errors, []);
 });

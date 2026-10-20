@@ -15,7 +15,7 @@
   }
   function create({ document, showAsset, onEdit, onStyle, onExport, onUpload }) {
     const $ = id => document.getElementById(id);
-    const state = { records: [], query: '', brand: '', filter: 'all', selected: null, prices: false, directoryCollapsed: true };
+    const state = { records: [], query: '', brand: '', filter: 'all', selected: null, prices: false, directoryCollapsed: true, mode: 'wall' };
     const node = (tag, className, text) => { const el = document.createElement(tag); if (className) el.className = className; if (text !== undefined) el.textContent = String(text); return el; };
     const button = (className, text, action) => { const el = node('button', className, text); el.type = 'button'; el.onclick = action; return el; };
     function setDirectory(collapsed) {
@@ -83,8 +83,8 @@
       $('book-empty').hidden = state.records.length > 0; $('book-no-results').hidden = !state.records.length || items.length > 0;
       grid.hidden = !items.length;
       for (const g of items) {
-        const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.dataset.selected = String(g.id === state.selected);
-        card.setAttribute('aria-controls', 'book-record'); if (g.id === state.selected) card.setAttribute('aria-current', 'true');
+        const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.dataset.selected = String(state.mode === 'record' && g.id === state.selected);
+        card.setAttribute('aria-controls', 'book-record'); if (state.mode === 'record' && g.id === state.selected) card.setAttribute('aria-current', 'true');
         card.setAttribute('aria-label', '打开档案册：' + g.name);
         const photos = g.archive?.photos || [], photo = photos.find(p => p.kind === 'runway');
         const visual = node('span', 'book-index-photo'), img = node('img');
@@ -98,10 +98,45 @@
         card.append(visual, text); grid.append(card);
       }
     }
+    function renderWall() {
+      const items = select(state.records, state), overview = $('book-overview');
+      overview.hidden = state.mode !== 'wall' || !items.length;
+      $('book-show-wall').setAttribute('aria-pressed', String(state.mode === 'wall'));
+      $('book-show-record').setAttribute('aria-pressed', String(state.mode === 'record'));
+      $('book-show-record').disabled = !state.selected;
+      if (state.mode !== 'wall') return;
+      const wall = $('book-wall'); wall.replaceChildren();
+      $('book-wall-count').textContent = items.length + ' 件收藏' + (state.query || state.brand || state.filter !== 'all' ? ' · 已筛选' : ' · 全部展示');
+      for (let n = 0; n < items.length; n += 4) {
+        const group = items.slice(n, n + 4), sheet = node('section', 'book-wall-sheet');
+        sheet.dataset.count = String(group.length); sheet.dataset.variant = (n / 4) % 2 ? 'b' : 'a';
+        sheet.setAttribute('aria-label', '第 ' + (n / 4 + 1) + ' 组收藏拼贴');
+        for (const g of group) {
+          const piece = button('book-wall-piece', undefined, () => open(g.id)); piece.dataset.garmentId = g.id;
+          piece.setAttribute('aria-label', '打开档案：' + (g.brand ? g.brand + ' / ' : '') + g.name);
+          const photo = node('span', 'book-wall-photo'), img = node('img'); img.alt = '实物：' + g.name;
+          photo.append(img); showAsset(img, g, 'thumb');
+          const attached = g.archive?.photos || [], attachedPhoto = attached.find(p => p.kind === 'runway') || attached[0];
+          if (attachedPhoto) {
+            const inset = node('span', 'book-wall-reference'), referenceImage = node('img');
+            referenceImage.alt = C.PHOTO_KINDS[attachedPhoto.kind] + '：' + g.name; inset.append(referenceImage, node('span', 'book-wall-reference-kind', C.PHOTO_KINDS[attachedPhoto.kind]));
+            showAsset(referenceImage, g, 'photo_' + attachedPhoto.id); photo.append(inset); piece.dataset.reference = 'true';
+          }
+          const note = node('span', 'book-wall-note');
+          note.append(node('span', 'book-wall-brand', g.brand || '个人收藏'), node('span', 'book-wall-name', g.name));
+          if (series(g)) note.append(node('span', 'book-wall-series', series(g)));
+          note.append(node('span', 'book-code', 'No. ' + reference(g)));
+          if (state.prices && C.formatPrice(g)) note.append(node('span', 'book-wall-price', '实付 ' + C.formatPrice(g)));
+          piece.append(photo, note); sheet.append(piece);
+        }
+        wall.append(sheet);
+      }
+    }
     function renderRecord() {
       const g = state.records.find(g => g.id === state.selected);
-      setDirectory(state.directoryCollapsed); $('book-record').hidden = !g;
+      setDirectory(state.directoryCollapsed); $('book-record').hidden = !g || state.mode !== 'record';
       if (!g) { state.selected = null; $('book-record-body').replaceChildren(); return; }
+      if (state.mode !== 'record') return;
       const a = C.archiveDetails(g.archive) || { photos: [] }, body = $('book-record-body');
       const inventoryOpen = body.dataset.garmentId === g.id && body.querySelector('details')?.open;
       body.dataset.garmentId = g.id; body.replaceChildren();
@@ -132,11 +167,11 @@
       $('book-previous').disabled = position < 1; $('book-next').disabled = position < 0 || position >= items.length - 1;
       $('book-page-number').textContent = position < 0 ? 'No. ' + reference(g) : String(position + 1).padStart(2, '0') + ' / ' + String(items.length).padStart(2, '0');
     }
-    function render(records = state.records) { state.records = records; renderIndex(); renderRecord(); }
+    function render(records = state.records) { state.records = records; renderIndex(); renderWall(); renderRecord(); }
     function open(id) {
       if (!state.records.some(g => g.id === id)) return;
       if (!select(state.records, state).some(g => g.id === id)) resetFilters();
-      state.selected = id; $('book-export-price').checked = false; render(); $('book-record').focus?.({ preventScroll: true }); $('book-record').scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      state.mode = 'record'; state.selected = id; $('book-export-price').checked = false; render(); $('book-record').focus?.({ preventScroll: true }); $('book-record').scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     }
     function move(direction) {
       const items = select(state.records, state), position = items.findIndex(g => g.id === state.selected); if (items[position + direction]) open(items[position + direction].id);
@@ -147,7 +182,10 @@
     $('book-prices').addEventListener('change', e => { state.prices = e.target.checked; render(); });
     function resetFilters() { state.query = state.brand = ''; state.filter = 'all'; $('book-search').value = $('book-brand').value = ''; $('book-filter').value = 'all'; }
     $('book-reset').onclick = () => { resetFilters(); render(); };
-    $('book-back').onclick = () => { setDirectory(false); $('book-index').focus?.({ preventScroll: true }); $('book-index').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); };
+    function showWall() { state.mode = 'wall'; render(); $('book-overview').focus?.({ preventScroll: true }); $('book-overview').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); }
+    $('book-back').onclick = showWall;
+    $('book-show-wall').onclick = showWall;
+    $('book-show-record').onclick = () => { if (state.selected) open(state.selected); };
     $('book-previous').onclick = () => move(-1); $('book-next').onclick = () => move(1);
     $('book-edit').onclick = () => { if (state.selected) onEdit(state.selected); };
     $('book-style').onclick = () => { if (state.selected) onStyle(state.selected); };
