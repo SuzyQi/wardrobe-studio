@@ -26,6 +26,7 @@
     }
     function image(g, field, label, caption = '', sourceUrl = '', lead = false) {
       const figure = node('figure', 'book-plate' + (lead ? ' book-plate-lead' : ''));
+      figure.dataset.kind = field.startsWith('photo_') ? g.archive?.photos?.find(p => 'photo_' + p.id === field)?.kind || 'reference' : 'garment';
       const mat = node('div', 'book-picture'), img = node('img'); img.alt = label + '：' + g.name; mat.append(img); showAsset(img, g, field);
       const figcaption = node('figcaption'); figcaption.append(node('span', 'book-type', label));
       if (caption) figcaption.append(node('p', 'book-caption', caption)); source(figcaption, sourceUrl);
@@ -52,14 +53,15 @@
         const visual = node('span', 'book-cover-image'), img = node('img'); img.alt = label + '：' + record.name; visual.append(img); showAsset(img, record, field);
         sheet.append(visual, node('span', 'book-cover-caption', label), node('span', 'book-cover-brand', record.brand || record.name)); return sheet;
       }
+      cover.dataset.layout = photo ? 'study' : other ? 'collection' : 'single';
       cover.append(print(g, 'image', 'COLLECTED PIECE / 实物', 'book-cover-primary'));
       if (photo) cover.append(print(g, 'photo_' + photo.id, C.PHOTO_KINDS[photo.kind] + ' / REFERENCE', 'book-cover-secondary'));
       else if (other) cover.append(print(other, 'thumb', 'FROM THE COLLECTION / 收录单品', 'book-cover-secondary'));
       const file = node('div', 'book-cover-file');
-      file.append(node('p', 'book-kicker', 'PERSONAL COLLECTION'), node('p', 'book-file-brand', g.brand || '衣橱收藏'), node('p', 'book-file-name', g.name));
+      file.append(node('p', 'book-kicker', photo ? 'A STUDY FROM THE COLLECTION' : 'FROM THE COLLECTION'), node('p', 'book-file-brand', g.brand || '衣橱收藏'), node('p', 'book-file-name', g.name));
       const row = node('p', 'book-file-line'); row.append(node('span', '', 'CATALOGUE No.'), node('strong', '', reference(g))); file.append(row);
       if (series(g)) file.append(node('p', 'book-file-line', series(g)));
-      file.append(node('p', 'book-file-handwriting', a.story ? a.story.slice(0, 58) + (a.story.length > 58 ? '…' : '') : '衣服，和它的来历。'));
+      if (a.story) file.append(node('p', 'book-file-handwriting', a.story.slice(0, 90) + (a.story.length > 90 ? '…' : '')));
       file.append(button('book-text-button', '翻开这份档案 ↗', () => open(g.id))); cover.append(file);
     }
     function renderIndex() {
@@ -75,21 +77,16 @@
       grid.hidden = !items.length;
       for (const g of items) {
         const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.setAttribute('aria-label', '打开档案册：' + g.name);
-        const visual = node('span', 'book-index-photo'), img = node('img'); img.alt = '实物：' + g.name; visual.append(img, node('span', 'book-print-caption', 'MY PIECE / 实物')); showAsset(img, g, 'thumb');
-        const photos = g.archive?.photos || [], photo = photos.find(p => p.kind === 'runway') || photos[0];
-        let referencePrint;
-        if (photo) {
-          referencePrint = node('span', 'book-index-reference'); const referenceImage = node('img'); referenceImage.alt = C.PHOTO_KINDS[photo.kind] + '：' + g.name;
-          referencePrint.append(referenceImage, node('span', 'book-print-caption', C.PHOTO_KINDS[photo.kind] + ' / REFERENCE')); showAsset(referenceImage, g, 'photo_' + photo.id);
-        }
+        const photos = g.archive?.photos || [], photo = photos.find(p => p.kind === 'runway');
+        const visual = node('span', 'book-index-photo'), img = node('img');
+        img.alt = (photo ? C.PHOTO_KINDS[photo.kind] : '实物') + '：' + g.name;
+        visual.append(img); showAsset(img, g, photo ? 'photo_' + photo.id : 'thumb');
         const text = node('span', 'book-index-label');
-        text.append(node('span', 'book-label-heading', 'PERSONAL COLLECTION'));
-        text.append(node('span', 'book-index-brand', g.brand || '个人收藏'), node('span', 'book-index-name', g.name));
-        text.append(node('span', 'book-index-series', series(g) || g.subcategory || C.categoryLabel(g.category)));
-        const foot = node('span', 'book-index-foot'); foot.append(node('span', 'book-code', 'No. ' + reference(g)), node('span', 'book-index-mark', g.demo ? '示例' : g.archive?.verification === 'confirmed' && series(g) ? '资料已确认' : g.archive?.relation || g.archive?.photos?.some(p => p.kind === 'runway') ? '秀款资料待确认' : '打开档案 ↗'));
+        text.append(node('span', 'book-index-brand', g.brand || '个人收藏'), node('span', 'book-index-series', series(g) || g.subcategory || C.categoryLabel(g.category)));
+        text.append(node('span', 'book-index-name', g.name));
+        const foot = node('span', 'book-index-foot'); foot.append(node('span', 'book-code', 'No. ' + reference(g)), node('span', 'book-index-mark', g.demo ? '示例' : photo ? '秀场图' : '实物'));
         text.append(foot); if (state.prices && C.formatPrice(g)) text.append(node('span', 'book-index-price', '实付 ' + C.formatPrice(g)));
-        if (g.archive?.story) text.append(node('span', 'book-index-story', g.archive.story.slice(0, 65) + (g.archive.story.length > 65 ? '…' : '')));
-        card.append(visual); if (referencePrint) card.append(referencePrint); card.append(text); grid.append(card);
+        card.append(visual, text); grid.append(card);
       }
     }
     function renderRecord() {
@@ -102,22 +99,22 @@
       head.append(top, node('p', 'book-record-brand', g.brand || '个人收藏'), node('h2', 'book-record-title', g.name));
       if (series(g)) head.append(node('p', 'book-record-series', series(g)));
       const photos = a.photos || [], first = photos.find(p => p.kind === 'runway') || photos[0], paired = node('div', 'book-paired-plates');
+      paired.dataset.layout = !first ? 'single' : first.kind === 'runway' ? 'comparison' : 'study';
       paired.append(image(g, 'image', '01 / 实物', [g.color, g.size].filter(Boolean).join(' · '), '', true));
       if (first) paired.append(image(g, 'photo_' + first.id, '02 / ' + C.PHOTO_KINDS[first.kind], first.caption, first.sourceUrl, true));
-      else {
-        const note = node('div', 'book-missing-plate'); note.append(node('span', 'book-kicker', 'A PLACE FOR THE REFERENCE'), node('h3', '', '它的来历，慢慢补齐'), node('p', '', '秀场、细节或自己的穿着照片，都可以放进这份档案。'), button('book-text-button', '＋ 补充附图', () => onEdit(g.id))); paired.append(note);
-      }
+      else paired.append(button('book-text-button book-add-reference', '＋ 添加秀场、细节或穿着照片', () => onEdit(g.id)));
       const spread = node('div', 'book-paper-spread'), collection = chapter('01', '系列与来历');
       const hasSeries = ['year', 'season', 'collection', 'look', 'relation', 'sourceUrl'].some(field => a[field]) || photos.some(p => p.kind === 'runway');
       facts(collection, [['年份', a.year], ['季节', a.season ? C.SEASONS[a.season] : ''], ['系列', a.collection], ['Look', a.look], ['与秀场的关系', a.relation ? C.RELATIONS[a.relation] : ''], ['资料状态', hasSeries ? (a.verification === 'confirmed' ? '已确认' : '待确认') : '尚未记录']]);
       source(collection, a.sourceUrl);
       const story = chapter('02', '我的收藏故事'); story.className += ' book-story-sheet';
-      story.append(node('p', 'book-story', a.story || '第一次遇见它，寻找它的过程，或一次特别的穿着回忆。'));
+      if (a.story) story.append(node('p', 'book-story', a.story));
       if (!a.story) story.append(button('book-text-button', '写下这件衣服的故事 ↗', () => onEdit(g.id)));
       spread.append(collection, story); body.append(head, paired, spread);
       const remaining = photos.filter(p => p !== first);
       if (remaining.length) {
         const details = chapter('03', '相册与细节'), gallery = node('div', 'book-detail-gallery');
+        gallery.dataset.layout = remaining.length === 1 ? 'single' : remaining.length === 2 ? 'pair' : 'contact';
         for (const p of remaining) gallery.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); details.append(gallery); body.append(details);
       }
       const purchase = chapter(remaining.length ? '04' : '03', '单品与购入记录');
