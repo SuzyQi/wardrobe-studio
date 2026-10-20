@@ -41,28 +41,7 @@
       section.append(dl); return dl;
     }
     function chapter(number, title) {
-      const section = node('section', 'book-chapter'); section.append(node('p', 'book-kicker', number + ' / RECORD'), node('h3', '', title)); return section;
-    }
-    function renderCover(items) {
-      const cover = $('book-cover'); cover.replaceChildren(); cover.hidden = !items.length;
-      if (!items.length) return;
-      const g = items.find(item => item.archive?.photos?.length) || items[0], a = g.archive || {};
-      const photo = a.photos?.find(p => p.kind === 'runway') || a.photos?.[0], other = items.find(item => item.id !== g.id);
-      function print(record, field, label, className) {
-        const sheet = button('book-cover-print ' + className, undefined, () => open(record.id)); sheet.setAttribute('aria-label', '打开档案册：' + record.name);
-        const visual = node('span', 'book-cover-image'), img = node('img'); img.alt = label + '：' + record.name; visual.append(img); showAsset(img, record, field);
-        sheet.append(visual, node('span', 'book-cover-caption', label), node('span', 'book-cover-brand', record.brand || record.name)); return sheet;
-      }
-      cover.dataset.layout = photo ? 'study' : other ? 'collection' : 'single';
-      cover.append(print(g, 'image', 'COLLECTED PIECE / 实物', 'book-cover-primary'));
-      if (photo) cover.append(print(g, 'photo_' + photo.id, C.PHOTO_KINDS[photo.kind] + ' / REFERENCE', 'book-cover-secondary'));
-      else if (other) cover.append(print(other, 'thumb', 'FROM THE COLLECTION / 收录单品', 'book-cover-secondary'));
-      const file = node('div', 'book-cover-file');
-      file.append(node('p', 'book-kicker', photo ? 'A STUDY FROM THE COLLECTION' : 'FROM THE COLLECTION'), node('p', 'book-file-brand', g.brand || '衣橱收藏'), node('p', 'book-file-name', g.name));
-      const row = node('p', 'book-file-line'); row.append(node('span', '', 'CATALOGUE No.'), node('strong', '', reference(g))); file.append(row);
-      if (series(g)) file.append(node('p', 'book-file-line', series(g)));
-      if (a.story) file.append(node('p', 'book-file-handwriting', a.story.slice(0, 90) + (a.story.length > 90 ? '…' : '')));
-      file.append(button('book-text-button', '翻开这份档案 ↗', () => open(g.id))); cover.append(file);
+      const section = node('section', 'book-chapter'); section.append(node('p', 'book-kicker', number), node('h3', '', title)); return section;
     }
     function renderIndex() {
       const options = C.brandOptions(state.records), brands = $('book-brand');
@@ -70,13 +49,17 @@
       brands.replaceChildren(); const all = node('option', '', '全部品牌'); all.value = ''; brands.append(all);
       for (const option of options) { const el = node('option', '', option.label + '（' + option.count + '）'); el.value = option.value; brands.append(el); } brands.value = state.brand;
       const items = select(state.records, state), grid = $('book-grid'); grid.replaceChildren();
-      renderCover(items);
+      const previous = state.selected;
+      if (!items.some(g => g.id === state.selected)) state.selected = (items.find(g => g.archive?.photos?.length) || items[0])?.id || null;
+      if (previous !== state.selected) $('book-export-price').checked = false;
       $('book-total').textContent = String(state.records.length).padStart(2, '0');
       $('book-results').textContent = items.length + ' 份档案' + (state.query || state.brand || state.filter !== 'all' ? ' · 已筛选' : ' · 按品牌整理');
       $('book-empty').hidden = state.records.length > 0; $('book-no-results').hidden = !state.records.length || items.length > 0;
       grid.hidden = !items.length;
       for (const g of items) {
-        const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.setAttribute('aria-label', '打开档案册：' + g.name);
+        const card = button('book-index-card', undefined, () => open(g.id)); card.dataset.garmentId = g.id; card.dataset.selected = String(g.id === state.selected);
+        card.setAttribute('aria-controls', 'book-record'); if (g.id === state.selected) card.setAttribute('aria-current', 'true');
+        card.setAttribute('aria-label', '打开档案册：' + g.name);
         const photos = g.archive?.photos || [], photo = photos.find(p => p.kind === 'runway');
         const visual = node('span', 'book-index-photo'), img = node('img');
         img.alt = (photo ? C.PHOTO_KINDS[photo.kind] : '实物') + '：' + g.name;
@@ -91,33 +74,40 @@
     }
     function renderRecord() {
       const g = state.records.find(g => g.id === state.selected);
-      $('book-index').hidden = !!g; $('book-record').hidden = !g;
+      $('book-index').hidden = false; $('book-record').hidden = !g;
       if (!g) { state.selected = null; $('book-record-body').replaceChildren(); return; }
-      const a = C.archiveDetails(g.archive) || { photos: [] }, body = $('book-record-body'); body.replaceChildren();
+      const a = C.archiveDetails(g.archive) || { photos: [] }, body = $('book-record-body');
+      const inventoryOpen = body.dataset.garmentId === g.id && body.querySelector('details')?.open;
+      body.dataset.garmentId = g.id; body.replaceChildren();
       const head = node('header', 'book-record-heading');
       const top = node('div', 'book-record-topline'); top.append(node('span', 'book-code', 'ARCHIVE / ' + reference(g)), node('span', 'book-type', C.PURCHASE_STATUSES[g.purchaseStatus || 'owned']));
       head.append(top, node('p', 'book-record-brand', g.brand || '个人收藏'), node('h2', 'book-record-title', g.name));
       if (series(g)) head.append(node('p', 'book-record-series', series(g)));
-      const photos = a.photos || [], first = photos.find(p => p.kind === 'runway') || photos[0], paired = node('div', 'book-paired-plates');
-      paired.dataset.layout = !first ? 'single' : first.kind === 'runway' ? 'comparison' : 'study';
-      paired.append(image(g, 'image', '01 / 实物', [g.color, g.size].filter(Boolean).join(' · '), '', true));
-      if (first) paired.append(image(g, 'photo_' + first.id, '02 / ' + C.PHOTO_KINDS[first.kind], first.caption, first.sourceUrl, true));
-      else paired.append(button('book-text-button book-add-reference', '＋ 添加秀场、细节或穿着照片', () => onEdit(g.id)));
-      const spread = node('div', 'book-paper-spread'), collection = chapter('01', '系列与来历');
+      const photos = a.photos || [], first = photos.find(p => p.kind === 'runway') || photos[0];
+      const collage = node('div', 'book-collage'); collage.dataset.layout = !first ? 'single' : first.kind === 'runway' ? 'comparison' : 'study';
+      const main = image(g, 'image', '01 / 实物', [g.color, g.size].filter(Boolean).join(' · ')); main.className += ' book-collage-main';
+      collage.append(main, head);
+      if (first) {
+        const reference = image(g, 'photo_' + first.id, '02 / ' + C.PHOTO_KINDS[first.kind], first.caption, first.sourceUrl); reference.className += ' book-collage-reference'; collage.append(reference);
+      } else main.append(button('book-text-button book-add-reference', '＋ 添加秀场、细节或穿着照片', () => onEdit(g.id)));
+      const collection = chapter('SOURCE NOTES', '系列与来历'); collection.className += ' book-collection-sheet';
       const hasSeries = ['year', 'season', 'collection', 'look', 'relation', 'sourceUrl'].some(field => a[field]) || photos.some(p => p.kind === 'runway');
-      facts(collection, [['年份', a.year], ['季节', a.season ? C.SEASONS[a.season] : ''], ['系列', a.collection], ['Look', a.look], ['与秀场的关系', a.relation ? C.RELATIONS[a.relation] : ''], ['资料状态', hasSeries ? (a.verification === 'confirmed' ? '已确认' : '待确认') : '尚未记录']]);
-      source(collection, a.sourceUrl);
-      const story = chapter('02', '我的收藏故事'); story.className += ' book-story-sheet';
+      facts(collection, [['年份', a.year], ['季节', a.season ? C.SEASONS[a.season] : ''], ['系列', a.collection], ['Look', a.look], ['与秀场的关系', a.relation ? C.RELATIONS[a.relation] : ''], ['资料状态', hasSeries ? (a.verification === 'confirmed' ? '已确认' : '待确认') : '尚未记录']]); source(collection, a.sourceUrl);
+      const story = chapter('PERSONAL NOTES', '我的收藏故事'); story.className += ' book-story-sheet';
       if (a.story) story.append(node('p', 'book-story', a.story));
-      if (!a.story) story.append(button('book-text-button', '写下这件衣服的故事 ↗', () => onEdit(g.id)));
-      spread.append(collection, story); body.append(head, paired, spread);
-      const remaining = photos.filter(p => p !== first);
-      if (remaining.length) {
-        const details = chapter('03', '相册与细节'), gallery = node('div', 'book-detail-gallery');
-        gallery.dataset.layout = remaining.length === 1 ? 'single' : remaining.length === 2 ? 'pair' : 'contact';
-        for (const p of remaining) gallery.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); details.append(gallery); body.append(details);
+      else story.append(button('book-text-button', '写下这件衣服的故事 ↗', () => onEdit(g.id)));
+      collage.append(story, collection);
+      const remaining = photos.filter(p => p !== first), inserts = remaining.slice(0, 2);
+      if (inserts.length) {
+        const details = node('div', 'book-collage-details'); details.dataset.count = String(inserts.length);
+        for (const p of inserts) details.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); collage.append(details);
       }
-      const purchase = chapter(remaining.length ? '04' : '03', '单品与购入记录');
+      body.append(collage);
+      if (remaining.length > 2) {
+        const details = chapter('CONTACT SHEET', '更多照片'), gallery = node('div', 'book-detail-gallery');
+        for (const p of remaining.slice(2)) gallery.append(image(g, 'photo_' + p.id, C.PHOTO_KINDS[p.kind], p.caption, p.sourceUrl)); details.append(gallery); body.append(details);
+      }
+      const purchase = node('details', 'book-inventory'); purchase.open = !!inventoryOpen; purchase.append(node('summary', '', '单品与购入记录'));
       facts(purchase, [['分类', g.subcategory || C.categoryLabel(g.category)], ['配色', g.color], ['尺码', g.size], ['款式', g.style], ['图案', g.pattern], ['购入日期', g.purchaseDate], ['购买渠道', g.purchaseSource], ['全新 / 二手', C.PURCHASE_CONDITIONS[g.purchaseCondition]], ['购入方式', C.PURCHASE_TYPES[g.purchaseType]], ['实付', state.prices ? C.formatPrice(g) : ''], ['原价', state.prices ? C.formatPrice(g, 'originalPrice') : '']]);
       if (g.notes) purchase.append(node('p', 'book-notes', g.notes)); body.append(purchase);
       const items = select(state.records, state), position = items.findIndex(item => item.id === g.id);
@@ -127,17 +117,19 @@
     function render(records = state.records) { state.records = records; renderIndex(); renderRecord(); }
     function open(id) {
       if (!state.records.some(g => g.id === id)) return;
-      state.selected = id; $('book-export-price').checked = false; renderRecord(); $('book-record').focus?.({ preventScroll: true }); $('book-record').scrollIntoView?.({ block: 'start', behavior: 'smooth' });
+      if (!select(state.records, state).some(g => g.id === id)) resetFilters();
+      state.selected = id; $('book-export-price').checked = false; render(); $('book-record').focus?.({ preventScroll: true }); $('book-record').scrollIntoView?.({ block: 'start', behavior: 'smooth' });
     }
     function move(direction) {
       const items = select(state.records, state), position = items.findIndex(g => g.id === state.selected); if (items[position + direction]) open(items[position + direction].id);
     }
-    $('book-search').addEventListener('input', e => { state.query = e.target.value.trim().toLowerCase(); renderIndex(); });
-    $('book-brand').addEventListener('change', e => { state.brand = e.target.value; renderIndex(); });
-    $('book-filter').addEventListener('change', e => { state.filter = e.target.value; renderIndex(); });
+    $('book-search').addEventListener('input', e => { state.query = e.target.value.trim().toLowerCase(); render(); });
+    $('book-brand').addEventListener('change', e => { state.brand = e.target.value; render(); });
+    $('book-filter').addEventListener('change', e => { state.filter = e.target.value; render(); });
     $('book-prices').addEventListener('change', e => { state.prices = e.target.checked; render(); });
-    $('book-reset').onclick = () => { state.query = state.brand = ''; state.filter = 'all'; $('book-search').value = $('book-brand').value = ''; $('book-filter').value = 'all'; renderIndex(); };
-    $('book-back').onclick = () => { state.selected = null; renderRecord(); $('book-index').focus?.({ preventScroll: true }); $('book-index').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); };
+    function resetFilters() { state.query = state.brand = ''; state.filter = 'all'; $('book-search').value = $('book-brand').value = ''; $('book-filter').value = 'all'; }
+    $('book-reset').onclick = () => { resetFilters(); render(); };
+    $('book-back').onclick = () => { $('book-index').focus?.({ preventScroll: true }); $('book-index').scrollIntoView?.({ block: 'start', behavior: 'smooth' }); };
     $('book-previous').onclick = () => move(-1); $('book-next').onclick = () => move(1);
     $('book-edit').onclick = () => { if (state.selected) onEdit(state.selected); };
     $('book-style').onclick = () => { if (state.selected) onStyle(state.selected); };

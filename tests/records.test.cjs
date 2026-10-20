@@ -413,7 +413,7 @@ test('the new navigation opens an independent index, preserving the original clo
 });
 test('the book opens every photo and provenance, edits shared records, exports cards and adds a garment to the existing board', async () => {
   const records = [bookGarment()], app = await start(records), el = app.elements; openBook(app); el['book-grid'].children[0].fire('click'); await flush();
-  assert.equal(el['book-index'].hidden, true); assert.equal(el['book-record'].hidden, false); const text = textOf(el['book-record-body']);
+  assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, false); const text = textOf(el['book-record-body']);
   for (const value of ['秀款露背旗袍', '2020', '待确认', '秀场参考图', '面料与标签', 'Vogue Runway / 卖家提供', '找到这件衣服的故事']) assert.ok(text.includes(value), value);
   assert.doesNotMatch(text, /1,500/); assert.equal(el['archive-dialog'].open, undefined);
   el['book-edit'].fire('click'); assert.equal(el['edit-dialog'].open, true); el['archive-story'].value = '补充后的共同故事'; el['edit-name'].value = '共同的新名称'; el['edit-form'].fire('submit'); await flush();
@@ -446,18 +446,22 @@ test('the book handles an empty collection, page turns, return to index and stab
   const number = ArchiveBook.reference(records[0]); assert.equal(ArchiveBook.reference({ ...records[0], name: '修改名称' }), number);
   openBook(app); el['book-grid'].children[0].fire('click'); assert.equal(el['book-previous'].disabled, true); assert.equal(el['book-next'].disabled, false);
   el['book-next'].fire('click'); assert.match(textOf(el['book-record-body']), /<script>文字名称<\/script>/); assert.equal(el['book-next'].disabled, true);
-  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, true);
+  el['book-back'].fire('click'); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, false);
   assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });
-test('the collage cover uses actual reference photos, and every print opens its own record', async () => {
-  const app = await start([bookGarment(), { ...oldGarment('g_second'), brand: '另一品牌', name: '另一件衣服' }]), el = app.elements;
-  openBook(app); assert.equal(el['book-cover'].hidden, false);
-  const cover = textOf(el['book-cover']); assert.match(cover, /Zimmermann/); assert.match(cover, /秀场/); assert.match(cover, /找到这件衣服的故事/);
-  find(el['book-cover'], 'book-cover-print book-cover-secondary').fire('click'); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/);
-  el['book-back'].fire('click'); el['book-search'].value = '找不到的名字'; el['book-search'].fire('input'); assert.equal(el['book-cover'].hidden, true);
-  const plain = await start([{ ...oldGarment('g_a'), brand: 'A', name: '第一件' }, { ...oldGarment('g_b'), brand: 'B', name: '第二件' }]); openBook(plain);
-  const second = find(plain.elements['book-cover'], 'book-cover-print book-cover-secondary'); assert.match(textOf(second), /收录单品/); assert.doesNotMatch(textOf(second), /秀场/);
-  second.fire('click'); assert.match(textOf(plain.elements['book-record-body']), /第二件/); assert.equal(plain.writes.length, 0); assert.deepEqual(app.errors, []); assert.deepEqual(plain.errors, []);
+test('a persistent vertical index opens the collage immediately, highlights selection and handles an empty filter', async () => {
+  const records = [bookGarment(), { ...oldGarment('g_second'), brand: 'House of CB', name: '另一件衣服' }], app = await start(records), el = app.elements;
+  openBook(app); assert.equal(el['book-index'].hidden, false); assert.equal(el['book-record'].hidden, false);
+  assert.match(textOf(el['book-record-body']), /秀款露背旗袍/);
+  let current = el['book-grid'].children.filter(card => card.attributes['aria-current'] === 'true'); assert.equal(current.length, 1); assert.equal(current[0].dataset.garmentId, 'g_book');
+  el['book-grid'].children.find(card => card.dataset.garmentId === 'g_second').fire('click');
+  assert.equal(el['book-index'].hidden, false); assert.match(textOf(el['book-record-body']), /另一件衣服/);
+  current = el['book-grid'].children.filter(card => card.attributes['aria-current'] === 'true'); assert.equal(current.length, 1); assert.equal(current[0].dataset.garmentId, 'g_second');
+  el['book-export-price'].checked = true; el['book-search'].value = 'Zimmermann'; el['book-search'].fire('input');
+  assert.equal(el['book-grid'].children.length, 1); assert.match(textOf(el['book-record-body']), /秀款露背旗袍/); assert.equal(el['book-export-price'].checked, false);
+  el['book-search'].value = '找不到的名字'; el['book-search'].fire('input'); assert.equal(el['book-record'].hidden, true); assert.equal(el['book-no-results'].hidden, false); assert.equal(el['book-index'].hidden, false);
+  el['book-reset'].fire('click'); assert.equal(el['book-grid'].children.length, 2); assert.equal(el['book-record'].hidden, false);
+  assert.equal(app.writes.length, 0); assert.deepEqual(app.errors, []);
 });
 test('catalogue cards choose one own runway or garment photo, keeping stories in the reading page', async () => {
   const records = [bookGarment(), { ...oldGarment('g_no_reference'), name: '没有附图的单品', brand: 'Zzz' }], app = await start(records), el = app.elements;
@@ -478,13 +482,24 @@ test('reading layouts adapt to available photographs without inventing history o
   for (const n of [2, 3]) { const id = 'p_detail_' + n; contact.archive.photos.push({ id, kind: 'detail', caption: '细节 ' + n, sourceUrl: '' }); contact['photo_' + id] = PNG; }
   const records = [single, study, contact], before = structuredClone(records), app = await start(records), el = app.elements;
   openBook(app); el['book-grid'].children[0].fire('click');
-  assert.equal(find(el['book-record-body'], 'book-paired-plates').dataset.layout, 'single');
+  assert.equal(find(el['book-record-body'], 'book-collage').dataset.layout, 'single');
   assert.doesNotMatch(textOf(el['book-record-body']), /2020|第一次遇见|慢慢补齐/);
   find(el['book-record-body'], 'book-text-button book-add-reference').fire('click'); assert.equal(el['edit-dialog'].open, true); el['edit-dialog'].close();
-  el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-paired-plates').dataset.layout, 'study');
+  el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-collage').dataset.layout, 'study');
   assert.match(textOf(el['book-record-body']), /面料与标签/);
-  el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-paired-plates').dataset.layout, 'comparison');
-  const gallery = find(el['book-record-body'], 'book-detail-gallery'); assert.equal(gallery.dataset.layout, 'contact'); assert.equal(gallery.children.length, 3);
+  el['book-next'].fire('click'); assert.equal(find(el['book-record-body'], 'book-collage').dataset.layout, 'comparison');
+  const inserts = find(el['book-record-body'], 'book-collage-details'), gallery = find(el['book-record-body'], 'book-detail-gallery');
+  assert.equal(inserts.children.length, 2); assert.equal(gallery.children.length, 1);
+  function imageCount(parent) { return (parent.tagName === 'IMG' ? 1 : 0) + parent.children.reduce((sum, child) => sum + imageCount(child), 0); }
+  assert.equal(imageCount(el['book-record-body']), 5, 'main image plus every attachment appears exactly once');
   for (const text of ['面料与标签', '细节 2', '细节 3', '找到这件衣服的故事', '待确认']) assert.match(textOf(el['book-record-body']), new RegExp(text));
   assert.equal(app.writes.length, 0); assert.deepEqual(records, before); assert.deepEqual(app.errors, []);
+});
+
+test('editing a filtered item keeps its collage selected after its name no longer matches the search', async () => {
+  const records = [bookGarment(), { ...oldGarment('g_second'), brand: 'House of CB', name: '另一件衣服' }], app = await start(records), el = app.elements;
+  openBook(app); el['book-search'].value = '露背'; el['book-search'].fire('input'); assert.equal(el['book-grid'].children.length, 1);
+  el['book-edit'].fire('click'); el['edit-name'].value = '改名后的藏品'; el['edit-form'].fire('submit'); await flush();
+  assert.match(textOf(el['book-record-body']), /改名后的藏品/); assert.equal(el['book-search'].value, ''); assert.equal(el['book-grid'].children.length, 2);
+  const active = el['book-grid'].children.filter(card => card.dataset.selected === 'true'); assert.equal(active.length, 1); assert.equal(active[0].dataset.garmentId, 'g_book'); assert.equal(el['book-index'].hidden, false); assert.deepEqual(app.errors, []);
 });

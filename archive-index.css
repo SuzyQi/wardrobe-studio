@@ -1,18 +1,17 @@
-/* A catalogue wall: one photograph and its short typed label per record. */
-#book-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px 14px;align-items:stretch;padding:0 0 36px}
-#book-grid>.book-index-card{min-width:0;width:100%;display:flex;flex-direction:column;text-align:left;padding:10px 10px 0;background:#fff;border:1px solid #dededb;border-radius:0;box-shadow:0 1px 2px #10182008;transition:border-color .15s;position:relative}
-#book-grid>.book-index-card:hover{border-color:#8a929d}
-#book-grid .book-index-photo{position:relative;display:block;width:100%;aspect-ratio:3/4;min-width:0;background:#f1f1ef;overflow:hidden}
+/* Persistent, vertical collection index. The reading desk is a sibling. */
+#book-grid{display:flex;flex-direction:column;gap:0;min-width:0;padding:0 0 8px}
+#book-grid>.book-index-card{display:grid;grid-template-columns:45px minmax(0,1fr);gap:10px;text-align:left;align-items:start;min-width:0;width:100%;padding:12px 7px 12px 6px;border:0;border-left:2px solid transparent;border-bottom:1px solid #e1e2e3;border-radius:0;background:transparent;box-shadow:none;position:relative}
+#book-grid>.book-index-card:hover{background:#f0f1f2}
+#book-grid>.book-index-card[data-selected="true"]{border-left-color:var(--book-blue);background:#e9edf1}
+#book-grid .book-index-photo{position:relative;display:block;aspect-ratio:3/4;width:45px;background:#f2f2f0;overflow:hidden}
 #book-grid .book-index-photo img{display:block;width:100%;height:100%;object-fit:contain;padding:0}
-#book-grid .book-index-label{display:flex;flex-direction:column;flex:1;padding:16px 4px 13px;min-width:0;width:100%}
-#book-grid .book-index-brand{display:block;font:bold 14px/1.45 var(--book-mono);text-transform:uppercase;letter-spacing:-.02em;color:var(--book-ink)}
-#book-grid .book-index-series{display:block;font:12px/1.6 var(--book-mono);color:#494c51;margin-top:3px}
-#book-grid .book-index-name{display:block;font:11px/1.8 var(--sans);color:var(--book-muted);margin-top:11px;margin-bottom:13px;overflow-wrap:anywhere}
-#book-grid .book-index-foot{display:flex;justify-content:space-between;gap:5px 10px;align-items:baseline;flex-wrap:wrap;margin-top:auto;padding-top:9px;border-top:1px solid #e7e7e4}
-#book-grid .book-index-foot .book-code,#book-grid .book-index-mark{font:8px/1.8 var(--book-mono);color:#74777c;letter-spacing:.02em}
-#book-grid .book-index-price{font:10px/1.8 var(--book-mono);margin-top:8px;color:var(--book-muted)}
-#book-grid .book-index-photo:has(img.cloud-image-pending):after,#book-grid .book-index-photo:has(img.cloud-image-failed):after{content:'正在加载图片…';position:absolute;inset:43% 10px auto;text-align:center;font:11px/1.8 var(--sans);color:var(--book-muted);pointer-events:none}
-#book-grid .book-index-photo:has(img.cloud-image-failed):after{content:'图片暂未加载，请同步重试'}
-@media(min-width:1450px){#book-grid{grid-template-columns:repeat(4,minmax(0,1fr));gap:15px 12px}}
-@media(max-width:800px){#book-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:660px){#book-grid{gap:11px 9px;padding-bottom:25px}#book-grid>.book-index-card{padding:7px 7px 0}#book-grid .book-index-label{padding:12px 1px 10px}#book-grid .book-index-brand{font-size:11px;line-height:1.6}#book-grid .book-index-series{font-size:10px}#book-grid .book-index-name{font-size:10px;margin:8px 0 10px}#book-grid .book-index-foot{gap:3px 6px;padding-top:7px}#book-grid .book-index-foot .book-code,#book-grid .book-index-mark{font-size:8px}}
+#book-grid .book-index-label{display:flex;flex-direction:column;min-width:0;padding:0}
+#book-grid .book-index-brand{font:bold 10px/1.5 var(--book-mono);text-transform:uppercase;color:var(--book-ink);letter-spacing:-.02em}
+#book-grid .book-index-series{font:9px/1.6 var(--book-mono);color:var(--book-muted);margin-top:2px}
+#book-grid .book-index-name{font:11px/1.8 var(--sans);color:#454b55;margin-top:4px;overflow-wrap:anywhere}
+#book-grid .book-index-foot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:2px 7px;margin-top:6px}
+#book-grid .book-index-foot .book-code,#book-grid .book-index-mark{font:7px/1.8 var(--book-mono);letter-spacing:.02em;color:var(--book-muted)}
+#book-grid .book-index-price{font:9px/1.8 var(--book-mono);color:var(--book-muted);margin-top:5px}
+#book-grid .book-index-photo:has(img.cloud-image-pending):after,#book-grid .book-index-photo:has(img.cloud-image-failed):after{content:'…';position:absolute;inset:35% 0 auto;text-align:center;color:var(--book-muted);font:12px/1 var(--book-mono);background:#f2f2f0}
+#book-grid .book-index-photo:has(img.cloud-image-failed):after{content:'待同步';font-size:8px}
+@media(max-width:800px){#book-grid{max-height:235px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;padding:0}#book-grid>.book-index-card{grid-template-columns:40px minmax(0,1fr);padding:9px 10px;gap:12px}#book-grid .book-index-photo{width:40px}#book-grid .book-index-brand{font-size:11px}#book-grid .book-index-name{font-size:12px}#book-grid .book-index-series{font-size:10px}#book-grid .book-index-foot{margin-top:4px}#book-grid .book-index-foot .book-code,#book-grid .book-index-mark{font-size:8px}}
