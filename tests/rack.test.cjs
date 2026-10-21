@@ -111,3 +111,10 @@ test('rabbit hanger keeps its carved proportions and reaches the straps without 
  const a=R.fitting({aspect:.6,left:.1,right:.9,y:.02,kind:'clip'},205,330);assert.deepEqual(R.rabbitFitting(a),a);
  assert(fs.existsSync(path.join(root,'assets/rabbit-hanger.webp')));
 });
+
+test('sleeved rabbit hanger hook reaches the neck while the full carving is hidden outside the opening',()=>{
+ const a=R.fitting({aspect:.7,left:.1,right:.9,y:.14,neckY:.04,kind:'shoulder'},205,330),b=R.rabbitFitting(a);
+ assert.equal(b.hanger.hookHeight,a.hanger.hookHeight);
+ assert(Math.abs(b.hanger.woodTop+b.hanger.w*110/1881-a.hanger.woodTop)<.001);
+ const css=fs.readFileSync(path.join(root,'rack.css'),'utf8');assert(css.includes('.hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}'));
+});

@@ -43,7 +43,7 @@ async function create({document:d,host=globalThis,wardrobe,cloud,imaging}){
   if(!container.neckHanger){const window=el('span','hanger-neck-window'),wood=el('span','hanger-neck-wood');window.setAttribute('aria-hidden','true');window.append(wood);container.append(window);container.neckHanger=window;}
   const window=container.neckHanger;window.hidden=false;window.style.left=geo.image.x+'px';window.style.top=geo.image.y+'px';window.style.width=geo.image.w+'px';window.style.height=geo.image.h+'px';window.style.clipPath='polygon('+R.neckPoints(neck).map(([x,y])=>(x*100)+'% '+(y*100)+'%').join(',')+')';
   const wood=window.children[0];wood.style.left=(geo.hanger.x-geo.image.x)+'px';wood.style.top=(3+geo.hanger.woodTop-geo.image.y)+'px';wood.style.width=geo.hanger.w+'px';wood.style.height=geo.hanger.drop+'px';
-  window.style.setProperty?.('--stem-x',(geo.hanger.x+geo.hanger.w/2-geo.image.x)+'px');window.style.setProperty?.('--stem-height',Math.max(0,3+geo.hanger.woodTop-geo.image.y)+'px');
+  window.style.setProperty?.('--stem-x',(geo.hanger.x+geo.hanger.w/2-geo.image.x)+'px');window.style.setProperty?.('--stem-height',Math.max(0,3+geo.hanger.woodTop+geo.hanger.w*110/1881-geo.image.y)+'px');
  }
  if(container===$('rack-detail-piece'))neckHandles(container,g,p,geo);
  }

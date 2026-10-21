@@ -30,3 +30,7 @@
 .hanger[data-kind=shoulder] .hanger-wood,.hanger[data-kind=straps] .hanger-wood,.hanger-neck-wood{background:transparent url('./assets/rabbit-hanger.webp') center bottom/100% auto no-repeat;clip-path:none;filter:drop-shadow(0 1px 1px #61452b18)}
 .hanger[data-kind=shoulder] .hanger-hook,.hanger[data-kind=straps] .hanger-hook{border-top-color:#b59545;border-right-color:#b59545}
 .hanger-neck-window:before{background:#b59545}
+
+/* Sleeved garments reveal the carving only through the neck opening.
+   The duplicate full-body layer must never leak above transparent shoulders. */
+.hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}

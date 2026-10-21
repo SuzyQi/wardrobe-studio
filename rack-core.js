@@ -58,7 +58,7 @@ function rabbitFitting(geo,closed=false){
  if(['shoulder','straps'].includes(hanger.kind)){
   const height=hanger.w*506/1881;
   if(hanger.kind==='straps'){hanger.woodTop+=hanger.drop-height+2;hanger.hookHeight=hanger.woodTop+10;}
-  else{hanger.woodTop-=closed?0:hanger.w*110/1881;hanger.hookHeight=Math.max(20,hanger.hookHeight-hanger.w*75/1881);}
+  else{hanger.woodTop-=closed?0:hanger.w*110/1881;}
   hanger.drop=height;
  }
  return {...geo,image,hanger};
