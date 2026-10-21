@@ -101,3 +101,13 @@ test('uncertain neckline fallback stays on the top rim and leaves a visible wood
  }
  assert.equal(R.defaultNeck({kind:'clip'}),null);assert.equal(R.defaultNeck({kind:'straps'}),null);
 });
+
+test('rabbit hanger keeps its carved proportions and reaches the straps without a floating gap',()=>{
+ for(const [w,h] of [[205,330],[260,395],[330,470]]){
+  const a=R.fitting({aspect:.42,left:.28,right:.72,y:.06,kind:'straps'},w,h),b=R.rabbitFitting(a);
+  assert.deepEqual(a.image,b.image);assert(Math.abs(b.hanger.drop/b.hanger.w-506/1881)<.00001);
+  assert(Math.abs(b.hanger.woodTop+b.hanger.drop-a.hanger.woodTop-a.hanger.drop-2)<.001);
+ }
+ const a=R.fitting({aspect:.6,left:.1,right:.9,y:.02,kind:'clip'},205,330);assert.deepEqual(R.rabbitFitting(a),a);
+ assert(fs.existsSync(path.join(root,'assets/rabbit-hanger.webp')));
+});

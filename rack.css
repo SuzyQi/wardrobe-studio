@@ -25,3 +25,8 @@
 .hanger-neck-window:before{left:calc(var(--stem-x) - 1px);top:0;height:var(--stem-height)}
 .hanger-neck-wood{right:auto;bottom:auto}
 .neck-toggle{margin:8px 0}.neck-editor{border-top:1px solid var(--line);padding-top:14px;margin:12px 0 20px}.neck-editor p{font-size:11px;color:#777f73;margin:8px 0}.neck-editor label{display:flex;align-items:center;gap:12px;margin:12px 0;font-size:12px}.neck-editor select,.neck-editor input{flex:1;min-width:0;accent-color:var(--accent)}.neck-editor select{padding:8px;background:var(--paper);border:1px solid var(--line)}.neck-actions{display:flex;gap:8px;flex-wrap:wrap}.neck-handle{position:absolute;z-index:5;width:28px;height:28px;transform:translate(-50%,-50%);border:2px solid white;background:#4e625b;color:white;border-radius:50%;font:12px sans-serif;touch-action:none;cursor:grab;padding:0;box-shadow:0 0 0 1px #4e625b}.neck-handle:active{cursor:grabbing}.neck-local{line-height:1.7}
+
+/* Generated double-rabbit wood carving; retain the photograph's proportions. */
+.hanger[data-kind=shoulder] .hanger-wood,.hanger[data-kind=straps] .hanger-wood,.hanger-neck-wood{background:transparent url('./assets/rabbit-hanger.webp') center bottom/100% auto no-repeat;clip-path:none;filter:drop-shadow(0 1px 1px #61452b18)}
+.hanger[data-kind=shoulder] .hanger-hook,.hanger[data-kind=straps] .hanger-hook{border-top-color:#b59545;border-right-color:#b59545}
+.hanger-neck-window:before{background:#b59545}
