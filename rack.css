@@ -14,3 +14,9 @@
 /* Reveal wood only through the neck opening, never across the sleeves. */
 .hanger-neck-window{position:absolute;display:block;z-index:1;pointer-events:none;clip-path:polygon(31% 0,69% 0,56% 100%,44% 100%)}
 .hanger-neck-wood{position:absolute;inset:0;display:block;background:linear-gradient(0deg,#92785d,#c5ad89 45%,#d7c29c 70%,#a88b65);clip-path:polygon(50% 0,100% calc(100% - 3px),100% 100%,50% 4px,0 100%,0 calc(100% - 3px))}
+
+/* Keep the exposed central hook connected to the wood inside the neckline. */
+.hanger[data-kind=shoulder] .hanger-hook{left:calc(50% - 14px);transform:none}
+.hanger-neck-window{clip-path:polygon(49% 0,51% 0,51% var(--neck-top),69% var(--neck-top),56% 100%,44% 100%,31% var(--neck-top),49% var(--neck-top))}
+.hanger-neck-window:before{content:"";position:absolute;left:calc(50% - 1px);top:14px;width:2px;height:calc(var(--neck-top) - 14px);background:#777c73}
+.hanger-neck-wood{bottom:auto}

@@ -26,7 +26,7 @@ async function create({document:d,host=globalThis,wardrobe,cloud,imaging}){
  // clipped wood layer reveals only the neck opening; shoulder arms stay behind.
  if(geo.hanger.kind==='shoulder'){
   if(!container.neckHanger){const window=el('span','hanger-neck-window'),wood=el('span','hanger-neck-wood');window.setAttribute('aria-hidden','true');window.append(wood);container.append(window);container.neckHanger=window;}
-  const window=container.neckHanger;window.hidden=false;window.style.left=geo.hanger.x+'px';window.style.top=(3+geo.hanger.woodTop)+'px';window.style.width=geo.hanger.w+'px';window.style.height=geo.hanger.drop+'px';
+  const window=container.neckHanger;window.hidden=false;window.style.left=geo.hanger.x+'px';window.style.top='3px';window.style.width=geo.hanger.w+'px';window.style.height=(geo.hanger.woodTop+geo.hanger.drop)+'px';window.style.setProperty?.('--neck-top',geo.hanger.woodTop+'px');window.children[0].style.top=geo.hanger.woodTop+'px';window.children[0].style.height=geo.hanger.drop+'px';
  }
  }
  async function imageURL(g,full=false){const key=g.id+':'+(full?'image':'thumb');if(urls.has(key))return urls.get(key);if(inflight.has(key))return inflight.get(key);const generation=epoch;
