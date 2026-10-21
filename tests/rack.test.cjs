@@ -61,3 +61,14 @@ test('hanger support follows narrow straps instead of a fixed rectangle and rema
  const skirt=R.support(make(120,200,[[20,0,100,200]]),120,200,'bottoms');assert.equal(skirt.kind,'clip');assert.equal(R.fitting(skirt,205,330,'bottoms').hanger.kind,'clip');
  const opaque=new Uint8ClampedArray(120*200*4).fill(255);assert.equal(R.support(opaque,120,200,'dresses').measured,false);
 });
+
+test('shirt hanger arms begin behind the collar and end inside the shoulders in every view',()=>{
+ const profile={aspect:.75,left:.12,right:.88,y:.16,neckY:.04,kind:'shoulder',measured:true};
+ for(const [w,h] of [[205,330],[260,395],[330,470]]){
+  const f=R.fitting(profile,w,h),apex=3+f.hanger.woodTop;
+  assert(apex>f.image.y+profile.neckY*f.image.h);
+  assert(apex+f.hanger.drop>f.image.y+profile.y*f.image.h);
+  assert(f.hanger.w<(profile.right-profile.left)*f.image.w);
+  assert(3-9+f.hanger.hookHeight>=apex);
+ }
+});

@@ -18,15 +18,18 @@ function support(data,width,height,category='tops'){
  const kind=fallback.kind==='hook'?'hook':category==='bottoms'?'clip':sparse?'straps':'shoulder';const fraction=kind==='straps'?.035:kind==='clip'?.025:kind==='hook'?.02:.13;
  const y=clamp(Math.round(top+h*fraction),top,bottom),samples=lines.slice(Math.max(top,y-2),Math.min(bottom+1,y+3)).filter(r=>r.count>=2&&r.r>r.l);
  if(!samples.length)return fallback;const median=a=>a.sort((a,b)=>a-b)[Math.floor(a.length/2)];
- return {aspect,left:median(samples.map(r=>r.l))/width,right:(median(samples.map(r=>r.r))+1)/width,y:y/height,kind,measured:true};
+ return {aspect,left:median(samples.map(r=>r.l))/width,right:(median(samples.map(r=>r.r))+1)/width,y:y/height,neckY:(top+h*.035)/height,kind,measured:true};
 }
 function fitting(profile,boxWidth,boxHeight,category='tops'){
  const p=profile||{aspect:.7,left:.13,right:.87,y:.12,kind:'shoulder'},aspect=Number.isFinite(p.aspect)&&p.aspect>0?p.aspect:.7,kind=p.kind;
  const imageTop=kind==='hook'?18:29,available=Math.max(10,boxHeight-imageTop-8),w=Math.min(boxWidth,available*aspect),h=w/aspect;
  const center=(p.left+p.right)/2,image={x:boxWidth/2-center*w,y:imageTop,w,h};
- const span=(p.right-p.left)*w,scale=kind==='straps'?1.04:kind==='clip'?.9:.94;
+ const span=(p.right-p.left)*w,scale=kind==='straps'?1.04:kind==='clip'?.9:kind==='shoulder'?.86:.94;
  const hangerWidth=clamp(span*scale,12,boxWidth*.96),contact=imageTop+p.y*h;
- return {image,hanger:{x:(boxWidth-hangerWidth)/2,w:hangerWidth,drop:Math.max(7,contact-18),kind},measured:!!p.measured};
+ // Shoulder arms sit behind the collar, with their ends buried inside the fabric.
+ const neck=kind==='shoulder'?imageTop+(Number.isFinite(p.neckY)?p.neckY:p.y*.25)*h+3:18;
+ const woodTop=kind==='shoulder'?neck-3:15,drop=kind==='shoulder'?Math.max(7,contact+5-neck):Math.max(7,contact-18);
+ return {image,hanger:{x:(boxWidth-hangerWidth)/2,w:hangerWidth,woodTop,hookHeight:kind==='shoulder'?neck+6:kind==='hook'?32:25,drop,kind},measured:!!p.measured};
 }
 
 return {clamp,pose,spring,release,filter,nearby,support,fitting};

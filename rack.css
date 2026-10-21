@@ -7,3 +7,6 @@
 .rack-piece .hanger,.detail-piece .hanger{pointer-events:none}.hanger[data-kind=straps] .hanger-wood{background:linear-gradient(0deg,#a18b6b,#cbb99a 65%,#b49d7d)}.hanger[data-kind=clip] .hanger-wood{clip-path:none;background:linear-gradient(#c1ad8c,#aa9170);height:5px!important;top:calc(100% - 6px);border-radius:2px}.hanger[data-kind=clip] .hanger-wood:before,.hanger[data-kind=clip] .hanger-wood:after{content:"";position:absolute;top:-2px;width:6px;height:13px;background:linear-gradient(90deg,#93998f,#d7dcd0,#81897c);border-radius:2px}.hanger[data-kind=clip] .hanger-wood:before{left:4%}.hanger[data-kind=clip] .hanger-wood:after{right:4%}.hanger[data-kind=hook] .hanger-wood{display:none}.hanger[data-kind=hook] .hanger-hook{height:32px}.rack-piece .garment-photo,.detail-piece img{max-width:none}
 
 .hanger[data-kind=clip]{z-index:1}
+
+/* Thin wooden arms tuck beneath shirt collars instead of forming a triangle above them. */
+.hanger[data-kind=shoulder] .hanger-wood{clip-path:polygon(50% 0,100% calc(100% - 3px),100% 100%,50% 4px,0 100%,0 calc(100% - 3px))}
