@@ -18,7 +18,7 @@ function support(data,width,height,category='tops'){
  const kind=fallback.kind==='hook'?'hook':category==='bottoms'?'clip':sparse?'straps':'shoulder';const fraction=kind==='straps'?.035:kind==='clip'?.025:kind==='hook'?.02:.13;
  const y=clamp(Math.round(top+h*fraction),top,bottom),samples=lines.slice(Math.max(top,y-2),Math.min(bottom+1,y+3)).filter(r=>r.count>=2&&r.r>r.l);
  if(!samples.length)return fallback;const median=a=>a.sort((a,b)=>a-b)[Math.floor(a.length/2)];
- return {aspect,left:median(samples.map(r=>r.l))/width,right:(median(samples.map(r=>r.r))+1)/width,y:y/height,neckY:(top+h*.035)/height,neck:kind==='shoulder'?neckline(data,width,height,{left,right,top,bottom}):null,kind,measured:true};
+ return {aspect,left:median(samples.map(r=>r.l))/width,right:(median(samples.map(r=>r.r))+1)/width,y:y/height,neckY:(top+h*.035)/height,topY:top/height,bodyHeight:h/height,collarWidth:clamp((median(band.map(r=>r.r-r.l+1))||(right-left+1))/width,.08,.34),neck:kind==='shoulder'?neckline(data,width,height,{left,right,top,bottom}):null,kind,measured:true};
 }
 // Locate a transparent neck indentation from the upper contour. Opaque back-neck
 // fabric is deliberately left uncertain; it must not produce a chest overlay.
@@ -33,6 +33,9 @@ function neckline(data,width,height,bounds){
  contour.push([x2/width,ry/height]);
  return {shape:'contour',x:c/width,y:rim/height,width:(x2-x1)/width,depth:depth/height,points:[[x1/width,rim/height],[x2/width,rim/height],...contour.reverse()],confidence:'outline'};
 }
+// An uncertain neckline still gets a small visible collar support, anchored to
+// the actual top of the cutout, never the former fixed chest-level window.
+function defaultNeck(p){if(p.kind!=='shoulder')return null;const body=p.bodyHeight||.9;return {shape:'round',x:(p.left+p.right)/2,y:Math.max(0,(Number.isFinite(p.topY)?p.topY:Math.max(0,(p.neckY||.04)-.035))-.006*body),width:clamp(p.collarWidth||.22,.08,.30),depth:.055*body,confidence:'fallback'};}
 function calibration(value){if(!value||!['round','v','closed'].includes(value.shape))return null;const out={shape:value.shape};for(const [k,a,b]of [['x',.1,.9],['y',0,.55],['width',.02,.65],['depth',.005,.35]]){if(!Number.isFinite(Number(value[k])))return null;out[k]=clamp(Number(value[k]),a,b);}out.width=Math.min(out.width,2*Math.min(out.x,1-out.x));out.depth=Math.min(out.depth,1-out.y);return out;}
 function neckPoints(n){if(!n||n.shape==='closed')return [];if(n.shape==='contour')return n.points;const {x,y,width:w,depth:h}=n,l=x-w/2,r=x+w/2;return n.shape==='v'?[[l,y],[r,y],[x,y+h]]:[[l,y],[r,y],[r-w*.08,y+h*.6],[x+w*.25,y+h*.92],[x,y+h],[x-w*.25,y+h*.92],[l+w*.08,y+h*.6]];}
 
@@ -49,5 +52,5 @@ function fitting(profile,boxWidth,boxHeight,category='tops'){
  return {image,hanger:{x:hangerCenter-hangerWidth/2,w:hangerWidth,woodTop,hookHeight:kind==='shoulder'?neck+6:kind==='hook'?32:25,drop,kind},measured:!!p.measured};
 }
 
-return {clamp,pose,spring,release,filter,nearby,support,fitting,neckline,calibration,neckPoints};
+return {clamp,pose,spring,release,filter,nearby,support,fitting,neckline,calibration,neckPoints,defaultNeck};
 });

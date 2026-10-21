@@ -73,14 +73,14 @@ test('shirt hanger arms begin behind the collar and end inside the shoulders in 
  }
 });
 
-test('uncertain opaque necks stay conservative; manual preview, cancel, save and restore remain per garment',async()=>{
- const {app,els,prefs,calls}=await ui();await app.openDetail(clothes[1]);assert(!els['rack-detail-piece'].neckHanger);
+test('uncertain opaque necks retain a collar support; manual preview, cancel, save and restore remain per garment',async()=>{
+ const {app,els,prefs,calls}=await ui();await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);
  await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);
  els['rack-neck-shape'].value='v';els['rack-neck-shape'].onchange();const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.match(window.style.clipPath,/polygon/);assert.equal(els['rack-detail-piece'].neckHandles.filter(b=>!b.hidden).length,3);
- await els['rack-neck-cancel'].onclick();assert.equal(window.hidden,true);assert(!prefs.has('wardrobe-rack-neck-v1'));
+ await els['rack-neck-cancel'].onclick();assert.equal(window.hidden,false);assert(!prefs.has('wardrobe-rack-neck-v1'));
  await els['rack-neck-toggle'].onclick();els['rack-neck-shape'].value='round';els['rack-neck-shape'].onchange();await els['rack-neck-save'].onclick();assert.equal(JSON.parse(prefs.get('wardrobe-rack-neck-v1')).top.shape,'round');assert.equal(window.hidden,false);
  await app.openDetail(clothes[2],'shoes');assert.equal(window.hidden,true);await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
- await els['rack-neck-toggle'].onclick();await els['rack-neck-auto'].onclick();await els['rack-neck-save'].onclick();assert.equal(window.hidden,true);assert.deepEqual(JSON.parse(prefs.get('wardrobe-rack-neck-v1')),{});assert.equal(calls.writes,0);app.dispose();
+ await els['rack-neck-toggle'].onclick();await els['rack-neck-auto'].onclick();await els['rack-neck-save'].onclick();assert.equal(window.hidden,false);assert.deepEqual(JSON.parse(prefs.get('wardrobe-rack-neck-v1')),{});assert.equal(calls.writes,0);app.dispose();
 });
 test('transparent neck indentation is detected, while opaque and flat high necks do not invent an opening',()=>{
  const w=100,h=200,a=new Uint8ClampedArray(w*h*4);for(let x=10;x<90;x++){const first=10+Math.max(0,20-Math.abs(x-50));for(let y=first;y<190;y++)a[(y*w+x)*4+3]=255;}
@@ -91,4 +91,13 @@ test('transparent neck indentation is detected, while opaque and flat high necks
 
 test('saved neck settings survive a fresh app and storage failure leaves the draft available',async()=>{
  const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'v',x:.5,y:.08,width:.2,depth:.1},bad:{shape:'v',x:null}})};const {app,els,host}=await ui({stored});await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-shape'].value,'v');host.localStorage.setItem=()=>{throw Error('quota');};await els['rack-neck-save'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.match(els['rack-neck-status'].textContent,/保存失败/);await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);app.dispose();
+});
+
+test('uncertain neckline fallback stays on the top rim and leaves a visible wood segment at mobile and large sizes',()=>{
+ for(const [w,h] of [[205,330],[260,395],[330,470]]){
+ const p={aspect:.65,left:.1,right:.9,y:.18,neckY:.09,topY:.05,bodyHeight:.9,collarWidth:.25,kind:'shoulder'},n=R.defaultNeck(p),f=R.fitting({...p,neckY:n.y+Math.min(.012,n.depth*.15)},w,h);
+ const apex=3+f.hanger.woodTop,top=f.image.y+p.topY*f.image.h;
+ assert(apex>=top-1&&apex<=top+4);assert(f.image.y+(n.y+n.depth)*f.image.h>apex+4);assert(n.depth<.055);assert(n.width<=.30);
+ }
+ assert.equal(R.defaultNeck({kind:'clip'}),null);assert.equal(R.defaultNeck({kind:'straps'}),null);
 });
