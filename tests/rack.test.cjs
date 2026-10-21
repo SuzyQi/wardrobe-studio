@@ -10,8 +10,8 @@ class Element{
  append(...xs){for(const x of xs){x.parentNode=this;this.children.push(x);}}replaceChildren(...xs){this.children=[];this.append(...xs);}remove(){if(this.parentNode)this.parentNode.children=this.parentNode.children.filter(x=>x!==this);}setAttribute(k,v){this.attributes[k]=String(v);}removeAttribute(k){delete this.attributes[k];}addEventListener(k,fn){this.events[k]=fn;}removeEventListener(k){delete this.events[k];}showModal(){this.open=true;}close(){this.open=false;this.events.close?.();}getBoundingClientRect(){return {left:0,top:0,width:390,height:400,right:390,bottom:400};}focus(){}setPointerCapture(){}closest(){return null;}
 }
 const tick=()=>new Promise(setImmediate);
-async function ui({records=clothes,remote=null,broken=false,reduce=false}={}){
- const html=fs.readFileSync(path.join(root,'rack.html'),'utf8'),els=Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>[m[1],new Element()]));const frames=new Map(),calls={writes:0,cloud:[],images:0,revoke:[]};let time=100,id=0;const prefs=new Map();const d={hidden:false,body:new Element(),getElementById:n=>{assert(els[n],n);return els[n];},createElement:t=>new Element(t),addEventListener(){},removeEventListener(){}};
+async function ui({records=clothes,remote=null,broken=false,reduce=false,stored={}}={}){
+ const html=fs.readFileSync(path.join(root,'rack.html'),'utf8'),els=Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>[m[1],new Element()]));const frames=new Map(),calls={writes:0,cloud:[],images:0,revoke:[]};let time=100,id=0;const prefs=new Map(Object.entries(stored));const d={hidden:false,body:new Element(),getElementById:n=>{assert(els[n],n);return els[n];},createElement:t=>new Element(t),addEventListener(){},removeEventListener(){}};
  const host={Blob,URL:{createObjectURL:()=>('blob:fixture-'+(++id)),revokeObjectURL:u=>calls.revoke.push(u)},performance:{now:()=>time},matchMedia:()=>({matches:reduce}),requestAnimationFrame:fn=>{const n=++id;frames.set(n,fn);return n;},cancelAnimationFrame:n=>frames.delete(n),localStorage:{getItem:k=>remote&&k==='wardrobe-github-device'?JSON.stringify({owner:'test',repo:'private-data',token:'fixture-only'}):prefs.get(k)||null,setItem:(k,v)=>prefs.set(k,v)},sessionStorage:{getItem:()=>null},addEventListener(){},removeEventListener(){}};
  const cloud={createClient:()=>({fullName:'test/private-data',connect:async()=>calls.cloud.push('connect'),readRemote:async()=>{calls.cloud.push('read');return {manifest:{garments:remote}};},getAsset:async()=>{calls.cloud.push('asset');return new Blob(['remote']);},disconnect(){calls.cloud.push('disconnect');},publish(){throw Error('must never publish');}}),localRecords:m=>m.garments};
  els['rack-detail-hanger'].append(new Element('span'),new Element('span'));
@@ -73,11 +73,22 @@ test('shirt hanger arms begin behind the collar and end inside the shoulders in 
  }
 });
 
-test('neck opening reveals wood over opaque neck photos while sleeve arms remain behind, and resets for shoes',async()=>{
- const {app,els}=await ui();await app.openDetail(clothes[1]);
- const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.equal(window.attributes['aria-hidden'],'true');assert(window.style.width);
- await app.openDetail(clothes[2],'shoes');assert.equal(window.hidden,true);
- await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
- assert.equal(els['rack-detail-piece'].children.filter(n=>n.className==='hanger-neck-window').length,1);
- app.dispose();
+test('uncertain opaque necks stay conservative; manual preview, cancel, save and restore remain per garment',async()=>{
+ const {app,els,prefs,calls}=await ui();await app.openDetail(clothes[1]);assert(!els['rack-detail-piece'].neckHanger);
+ await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);
+ els['rack-neck-shape'].value='v';els['rack-neck-shape'].onchange();const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.match(window.style.clipPath,/polygon/);assert.equal(els['rack-detail-piece'].neckHandles.filter(b=>!b.hidden).length,3);
+ await els['rack-neck-cancel'].onclick();assert.equal(window.hidden,true);assert(!prefs.has('wardrobe-rack-neck-v1'));
+ await els['rack-neck-toggle'].onclick();els['rack-neck-shape'].value='round';els['rack-neck-shape'].onchange();await els['rack-neck-save'].onclick();assert.equal(JSON.parse(prefs.get('wardrobe-rack-neck-v1')).top.shape,'round');assert.equal(window.hidden,false);
+ await app.openDetail(clothes[2],'shoes');assert.equal(window.hidden,true);await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
+ await els['rack-neck-toggle'].onclick();await els['rack-neck-auto'].onclick();await els['rack-neck-save'].onclick();assert.equal(window.hidden,true);assert.deepEqual(JSON.parse(prefs.get('wardrobe-rack-neck-v1')),{});assert.equal(calls.writes,0);app.dispose();
+});
+test('transparent neck indentation is detected, while opaque and flat high necks do not invent an opening',()=>{
+ const w=100,h=200,a=new Uint8ClampedArray(w*h*4);for(let x=10;x<90;x++){const first=10+Math.max(0,20-Math.abs(x-50));for(let y=first;y<190;y++)a[(y*w+x)*4+3]=255;}
+ const n=R.neckline(a,w,h,{left:10,right:89,top:10,bottom:189});assert(n);assert(n.depth>.05);assert(R.neckPoints(n).length>4);
+ const opaque=new Uint8ClampedArray(w*h*4).fill(255);assert.equal(R.neckline(opaque,w,h,{left:0,right:99,top:0,bottom:199}),null);
+ assert.equal(R.calibration({shape:'v',x:NaN,y:.1,width:.2,depth:.1}),null);assert.equal(R.calibration({shape:'bad',x:.5,y:.1,width:.2,depth:.1}),null);assert.deepEqual(R.neckPoints({shape:'closed'}),[]);
+});
+
+test('saved neck settings survive a fresh app and storage failure leaves the draft available',async()=>{
+ const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'v',x:.5,y:.08,width:.2,depth:.1},bad:{shape:'v',x:null}})};const {app,els,host}=await ui({stored});await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-shape'].value,'v');host.localStorage.setItem=()=>{throw Error('quota');};await els['rack-neck-save'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.match(els['rack-neck-status'].textContent,/保存失败/);await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);app.dispose();
 });
