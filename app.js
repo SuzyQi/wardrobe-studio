@@ -12,6 +12,7 @@
   const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
   let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
   let archiveBook = null, editingFromBook = false;
+  let requestedArchive = window.location?.search ? new URLSearchParams(window.location.search).get('garment') : null;
   let draftChain = Promise.resolve(), sliderStart = null;
   const Cloud = window.WardrobeCloud, rawLocalWrite = DB.write.bind(DB);
   const cloud = { client: null, saved: { id: 'github-sync', config: { owner: 'SuzyQi', repo: 'wardrobe-studio-data' }, base: null, dirty: true },
@@ -417,6 +418,9 @@
     }
     if (state.view === 'book') archiveBook?.render(state.garments);
     $('remove-demo').hidden = !state.garments.some(g => g.demo); cleanupUrls();
+    if (state.ready && requestedArchive && garment(requestedArchive)) {
+      const id = requestedArchive; requestedArchive = null; openArchive(id);
+    }
   }
   function setView(value) {
     state.view = value; $('workspace').hidden = value !== 'closet'; $('outfits-view').hidden = value !== 'outfits'; $('book-view').hidden = value !== 'book';
