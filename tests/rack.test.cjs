@@ -90,7 +90,7 @@ test('transparent neck indentation is detected, while opaque and flat high necks
 });
 
 test('saved neck settings survive a fresh app and storage failure leaves the draft available',async()=>{
- const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'v',x:.5,y:.08,width:.2,depth:.1},bad:{shape:'v',x:null}})};const {app,els,host}=await ui({stored});await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-shape'].value,'v');host.localStorage.setItem=()=>{throw Error('quota');};await els['rack-neck-save'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.match(els['rack-neck-status'].textContent,/保存失败/);await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);app.dispose();
+ const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'v',x:.5,y:.08,width:.2,depth:.1},bad:{shape:'v',x:null}})};const {app,els,host}=await ui({stored});await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-shape'].value,'v');assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);host.localStorage.setItem=()=>{throw Error('quota');};await els['rack-neck-save'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.match(els['rack-neck-status'].textContent,/保存失败/);await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);app.dispose();
 });
 
 test('uncertain neckline fallback stays on the top rim and leaves a visible wood segment at mobile and large sizes',()=>{
@@ -117,4 +117,10 @@ test('sleeved rabbit hanger hook reaches the neck while the full carving is hidd
  assert.equal(b.hanger.hookHeight,a.hanger.hookHeight);
  assert(Math.abs(b.hanger.woodTop+b.hanger.w*110/1881-a.hanger.woodTop)<.001);
  const css=fs.readFileSync(path.join(root,'rack.css'),'utf8');assert(css.includes('.hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}'));
+});
+
+test('calibration status distinguishes persisted settings, edits, cancellation and pending automatic restore',async()=>{
+ const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'round',x:.5,y:.06,width:.2,depth:.1}})},u=await ui({stored});const {app,els}=u;await app.openDetail(clothes[1]);await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
+ els['rack-neck-width'].value='25';els['rack-neck-width'].oninput();assert.match(els['rack-neck-status'].textContent,/本次修改尚未保存/);await els['rack-neck-cancel'].onclick();await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
+ await els['rack-neck-auto'].onclick();assert.match(els['rack-neck-status'].textContent,/恢复自动预览.*尚未保存/);await els['rack-neck-save'].onclick();assert.match(els['rack-neck-message'].textContent,/已恢复自动估计/);app.dispose();
 });
