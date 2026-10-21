@@ -72,3 +72,12 @@ test('shirt hanger arms begin behind the collar and end inside the shoulders in 
   assert(3-9+f.hanger.hookHeight>=apex);
  }
 });
+
+test('neck opening reveals wood over opaque neck photos while sleeve arms remain behind, and resets for shoes',async()=>{
+ const {app,els}=await ui();await app.openDetail(clothes[1]);
+ const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.equal(window.attributes['aria-hidden'],'true');assert(window.style.width);
+ await app.openDetail(clothes[2],'shoes');assert.equal(window.hidden,true);
+ await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
+ assert.equal(els['rack-detail-piece'].children.filter(n=>n.className==='hanger-neck-window').length,1);
+ app.dispose();
+});

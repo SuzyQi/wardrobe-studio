@@ -10,3 +10,7 @@
 
 /* Thin wooden arms tuck beneath shirt collars instead of forming a triangle above them. */
 .hanger[data-kind=shoulder] .hanger-wood{clip-path:polygon(50% 0,100% calc(100% - 3px),100% 100%,50% 4px,0 100%,0 calc(100% - 3px))}
+
+/* Reveal wood only through the neck opening, never across the sleeves. */
+.hanger-neck-window{position:absolute;display:block;z-index:1;pointer-events:none;clip-path:polygon(31% 0,69% 0,56% 100%,44% 100%)}
+.hanger-neck-wood{position:absolute;inset:0;display:block;background:linear-gradient(0deg,#92785d,#c5ad89 45%,#d7c29c 70%,#a88b65);clip-path:polygon(50% 0,100% calc(100% - 3px),100% 100%,50% 4px,0 100%,0 calc(100% - 3px))}
