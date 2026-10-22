@@ -34,3 +34,12 @@
 /* Sleeved garments reveal the carving only through the neck opening.
    The duplicate full-body layer must never leak above transparent shoulders. */
 .hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}
+
+/* Mobile calibration focuses on the neck, rather than shrinking a whole dress. */
+@media(max-width:600px){
+ #rack-detail[data-calibrating=true] .detail-picture{height:240px}
+ #rack-detail[data-calibrating=true] .detail-piece{left:0;top:20px;width:100%;height:650px}
+ #rack-detail[data-calibrating=true] .detail-copy>h2,#rack-detail[data-calibrating=true] .detail-copy>.detail-brand,#rack-detail[data-calibrating=true] .detail-copy>dl,#rack-detail[data-calibrating=true] .detail-copy>.story,#rack-detail[data-calibrating=true] .detail-copy>.note,#rack-detail[data-calibrating=true] .detail-controls,#rack-detail[data-calibrating=true] #rack-archive{display:none}
+ #rack-detail[data-calibrating=true] .neck-editor{margin-top:8px;padding-top:6px}
+ #rack-detail[data-calibrating=true] .neck-handle{width:32px;height:32px}
+}

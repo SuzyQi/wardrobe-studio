@@ -75,11 +75,11 @@ test('shirt hanger arms begin behind the collar and end inside the shoulders in 
 
 test('uncertain opaque necks retain a collar support; manual preview, cancel, save and restore remain per garment',async()=>{
  const {app,els,prefs,calls}=await ui();await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);
- await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);
+ await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.equal(els['rack-detail'].dataset.calibrating,'true');
  els['rack-neck-shape'].value='v';els['rack-neck-shape'].onchange();const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.match(window.style.clipPath,/polygon/);assert.equal(els['rack-detail-piece'].neckHandles.filter(b=>!b.hidden).length,3);
- await els['rack-neck-cancel'].onclick();assert.equal(window.hidden,false);assert(!prefs.has('wardrobe-rack-neck-v1'));
+ await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail'].dataset.calibrating,'false');assert.equal(window.hidden,false);assert(!prefs.has('wardrobe-rack-neck-v1'));
  await els['rack-neck-toggle'].onclick();els['rack-neck-shape'].value='round';els['rack-neck-shape'].onchange();await els['rack-neck-save'].onclick();assert.equal(JSON.parse(prefs.get('wardrobe-rack-neck-v1')).top.shape,'round');assert.equal(window.hidden,false);
- await app.openDetail(clothes[2],'shoes');assert.equal(window.hidden,true);await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
+ await app.openDetail(clothes[2],'shoes');assert.equal(els['rack-detail'].dataset.calibrating,'false');assert.equal(window.hidden,true);await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
  await els['rack-neck-toggle'].onclick();await els['rack-neck-auto'].onclick();await els['rack-neck-save'].onclick();assert.equal(window.hidden,false);assert.deepEqual(JSON.parse(prefs.get('wardrobe-rack-neck-v1')),{});assert.equal(calls.writes,0);app.dispose();
 });
 test('transparent neck indentation is detected, while opaque and flat high necks do not invent an opening',()=>{
