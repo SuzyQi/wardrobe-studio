@@ -37,6 +37,23 @@ function neckline(data,width,height,bounds){
 // the actual top of the cutout, never the former fixed chest-level window.
 function defaultNeck(p){if(p.kind!=='shoulder')return null;const body=p.bodyHeight||.9;return {shape:'round',x:(p.left+p.right)/2,y:Math.max(0,(Number.isFinite(p.topY)?p.topY:Math.max(0,(p.neckY||.04)-.035))-.006*body),width:clamp(p.collarWidth||.22,.08,.30),depth:.055*body,confidence:'fallback'};}
 function calibration(value){if(!value||!['auto','round','v','closed'].includes(value.shape))return null;const out={shape:value.shape};for(const [k,a,b]of [['x',.1,.9],['y',0,.55],['width',.02,.65],['depth',.005,.35]]){if(!Number.isFinite(Number(value[k])))return null;out[k]=clamp(Number(value[k]),a,b);}if(['auto','rabbit','clip','hook'].includes(value.suspension))out.suspension=value.suspension;if(Number.isFinite(Number(value.scale)))out.scale=clamp(Number(value.scale),.45,1.3);out.width=Math.min(out.width,2*Math.min(out.x,1-out.x));out.depth=Math.min(out.depth,1-out.y);return out;}
+// Conservative name hints supplement the silhouette; ambiguous names stay automatic.
+function structurePreset(g,p,structure='auto'){
+ if(!['tops','outerwear','dresses','uncategorized'].includes(g.category))return null;
+ if(structure==='auto'){
+  const text=[g.name,g.neckline,g.sleeve].filter(Boolean).join(' ').toLowerCase();
+  structure=/strapless|抹胸|无肩带/.test(text)?'strapless':/puff.?sleeve|泡泡袖|泡袖/.test(text)?'puff':/high.?neck|turtleneck|高领|蕾丝高领/.test(text)?'covered':null;
+ }
+ if(!structure)return null;
+ const body=p.bodyHeight||.9,top=Number.isFinite(p.topY)?p.topY:Math.max(0,(p.neckY||.04)-.035),n=p.neck||defaultNeck({...p,kind:'shoulder'}),base={shape:'round',x:n.x,y:top,width:n.width,depth:n.depth,suspension:'rabbit',scale:1};
+ if(structure==='scoop')Object.assign(base,{y:top+.035*body,width:.30,depth:.12*body});
+ else if(structure==='round')Object.assign(base,{y:top,width:.18,depth:.035*body});
+ else if(structure==='puff')Object.assign(base,{shape:'auto',scale:.72});
+ else if(structure==='strapless')Object.assign(base,{shape:'auto',suspension:'clip',y:top+.015*body,scale:.82});
+ else if(structure==='covered')Object.assign(base,{shape:'closed',suspension:'hook',y:top});
+ else return null;
+ return calibration(base);
+}
 function neckPoints(n){if(!n||n.shape==='closed')return [];if(n.shape==='contour')return n.points;const {x,y,width:w,depth:h}=n,l=x-w/2,r=x+w/2;return n.shape==='v'?[[l,y],[r,y],[x,y+h]]:[[l,y],[r,y],[r-w*.08,y+h*.6],[x+w*.25,y+h*.92],[x,y+h],[x-w*.25,y+h*.92],[l+w*.08,y+h*.6]];}
 
 function fitting(profile,boxWidth,boxHeight,category='tops'){
@@ -67,5 +84,5 @@ function rabbitFitting(geo,closed=false){
  return {...geo,image,hanger};
 }
 
-return {clamp,pose,spring,release,filter,nearby,support,fitting,neckline,calibration,neckPoints,defaultNeck,rabbitFitting};
+return {clamp,pose,spring,release,filter,nearby,support,fitting,neckline,calibration,neckPoints,defaultNeck,rabbitFitting,structurePreset};
 });

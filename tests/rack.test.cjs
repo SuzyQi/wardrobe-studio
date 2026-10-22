@@ -149,3 +149,16 @@ test('resizing the rabbit preserves the photo and keeps its hook joined; clip st
  }
  const old={shape:'v',x:.5,y:.1,width:.2,depth:.1};assert.deepEqual(R.calibration(old),old);assert.equal(R.calibration({...old,scale:10,suspension:'clip'}).scale,1.3);
 });
+
+test('structure presets give distinct support to scoop necks, puff sleeves, strapless and covered collars',()=>{
+ const g={category:'dresses',name:'unnamed'},p={aspect:.6,kind:'shoulder',left:.1,right:.9,y:.12,topY:.03,bodyHeight:.9};
+ const scoop=R.structurePreset(g,p,'scoop'),round=R.structurePreset(g,p,'round'),puff=R.structurePreset(g,p,'puff'),clip=R.structurePreset(g,p,'strapless'),covered=R.structurePreset(g,p,'covered');
+ assert(scoop.y>round.y);assert(scoop.depth>round.depth);assert(puff.scale<round.scale);assert.equal(clip.suspension,'clip');assert(clip.y>=p.topY&&clip.y<p.topY+.03);assert.equal(covered.suspension,'hook');assert.equal(covered.shape,'closed');
+ assert.equal(R.structurePreset(g,p),null);assert.equal(R.structurePreset({...g,name:'pink strapless corset dress'},p).suspension,'clip');assert.equal(R.structurePreset({...g,name:'white puff sleeve dress'},p).scale,.72);assert.equal(R.structurePreset({...g,category:'shoes',name:'strapless'},p),null);
+});
+
+test('explicit clothing structure names auto-fit while saved garment settings take priority',async()=>{
+ const records=[{...clothes[0],name:'pink strapless corset midi dress'}],u=await ui({records});await u.app.openDetail(records[0]);assert.equal(u.els['rack-detail-hanger'].dataset.kind,'clip');assert.equal(u.calls.writes,0);
+ await u.els['rack-neck-toggle'].onclick();u.els['rack-structure-preset'].value='covered';u.els['rack-structure-preset'].onchange();assert.equal(u.els['rack-detail-hanger'].dataset.kind,'hook');await u.els['rack-neck-save'].onclick();await u.app.openDetail(records[0]);assert.equal(u.els['rack-detail-hanger'].dataset.kind,'hook');
+ await u.els['rack-neck-toggle'].onclick();await u.els['rack-neck-auto'].onclick();await u.els['rack-neck-save'].onclick();assert.equal(u.els['rack-detail-hanger'].dataset.kind,'clip');u.app.dispose();
+});
