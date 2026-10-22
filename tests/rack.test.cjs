@@ -14,7 +14,6 @@ async function ui({records=clothes,remote=null,broken=false,reduce=false,stored=
  const html=fs.readFileSync(path.join(root,'rack.html'),'utf8'),els=Object.fromEntries([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>[m[1],new Element()]));const frames=new Map(),calls={writes:0,cloud:[],images:0,revoke:[]};let time=100,id=0;const prefs=new Map(Object.entries(stored));const d={hidden:false,body:new Element(),getElementById:n=>{assert(els[n],n);return els[n];},createElement:t=>new Element(t),addEventListener(){},removeEventListener(){}};
  const host={Blob,URL:{createObjectURL:()=>('blob:fixture-'+(++id)),revokeObjectURL:u=>calls.revoke.push(u)},performance:{now:()=>time},matchMedia:()=>({matches:reduce}),requestAnimationFrame:fn=>{const n=++id;frames.set(n,fn);return n;},cancelAnimationFrame:n=>frames.delete(n),localStorage:{getItem:k=>remote&&k==='wardrobe-github-device'?JSON.stringify({owner:'test',repo:'private-data',token:'fixture-only'}):prefs.get(k)||null,setItem:(k,v)=>prefs.set(k,v)},sessionStorage:{getItem:()=>null},addEventListener(){},removeEventListener(){}};
  const cloud={createClient:()=>({fullName:'test/private-data',connect:async()=>calls.cloud.push('connect'),readRemote:async()=>{calls.cloud.push('read');return {manifest:{garments:remote}};},getAsset:async()=>{calls.cloud.push('asset');return new Blob(['remote']);},disconnect(){calls.cloud.push('disconnect');},publish(){throw Error('must never publish');}}),localRecords:m=>m.garments};
- els['rack-detail-hanger'].append(new Element('span'),new Element('span'));
  const app=await App.create({document:d,host,wardrobe:{read:async()=>structuredClone(records),write:()=>{calls.writes++;throw Error('must never mutate wardrobe');}},cloud,imaging:{fromDataUrl:x=>new Blob([x]),load:async()=>{calls.images++;if(broken)throw Error('图片损坏');return {};}}});
  async function flush(){for(let i=0;i<240&&frames.size;i++){const f=[...frames.values()];frames.clear();time+=16;for(const fn of f)fn(time);}await tick();}
  return {app,els,calls,host,frames,prefs,flush,advance:n=>time+=n};
@@ -39,7 +38,7 @@ test('missing or corrupt photos show an explicit error and do not erase wardrobe
 });
 test('examples are opt-in and isolated; source assets and all app IDs resolve; no paid or external rendering dependencies',async()=>{
  const {app,host,calls}=await ui({records:[]});host.WardrobeDemo=[{name:'示例',category:'tops',svg:'<svg viewBox="0 0 100 100"></svg>'}];assert.equal(app.getState().ids.length,0);app.examples();assert.equal(app.getState().example,true);assert.deepEqual(app.getState().ids,['rack-demo-0']);assert.equal(calls.writes,0);
- const html=fs.readFileSync(path.join(root,'rack.html'),'utf8'),js=fs.readFileSync(path.join(root,'rack-app.js'),'utf8');const ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));for(const m of js.matchAll(/\$\('([^']+)'\)/g))assert(ids.has(m[1]),m[1]);for(const m of html.matchAll(/(?:src|href)="\.\/([^"?]+)/g))assert(fs.existsSync(path.join(root,m[1])),m[1]);assert(!/<script[^>]+src="https?:/.test(html));assert(fs.readFileSync(path.join(root,'index.html'),'utf8').includes('href="./rack.html"'));
+ const html=fs.readFileSync(path.join(root,'rack.html'),'utf8'),js=fs.readFileSync(path.join(root,'rack-app.js'),'utf8');const ids=new Set([...html.matchAll(/\bid="([^"]+)"/g)].map(m=>m[1]));for(const m of js.matchAll(/\$\('([^']+)'\)/g))assert(ids.has(m[1]),m[1]);for(const m of html.matchAll(/(?:src|href)="\.\/([^"?]+)/g))assert(fs.existsSync(path.join(root,m[1])),m[1]);assert(!/<script[^>]+src="https?:/.test(html));assert(fs.readFileSync(path.join(root,'index.html'),'utf8').includes('href="./rack.html?v=20261022-floating"'));
 });
 test('shoes never enter the hanging carousel or its arrows and instead open from a separate shelf without changing the selected garment',async()=>{
  const second={...clothes[2],id:'shoes2',name:'第二双鞋'};const {app,els,calls}=await ui({records:[...clothes,second]});await tick();assert.deepEqual(app.getState().ids,['dress','top']);assert.deepEqual(app.getState().shoeIds,['shoes','shoes2']);assert(els['rack-pieces'].children.every(n=>!n.dataset.id.startsWith('shoes')));assert.equal(els['rack-shoes'].hidden,false);assert.equal(els['rack-shoe-row'].children.length,2);assert(!els['rack-shoe-row'].children[0].children.some(n=>n.className==='hanger'));await app.openDetail();assert(els['rack-detail-image'].style.width);app.closeDetail();await els['rack-shoe-row'].children[0].onclick();assert.equal(els['rack-detail-image'].style.width,'');assert.equal(els['rack-detail'].dataset.category,'shoes');assert.equal(els['rack-detail-name'].textContent,'鞋');assert.match(els['rack-archive'].href,/garment=shoes$/);assert.equal(els['rack-detail-prev'].disabled,true);await els['rack-detail-next'].onclick();assert.equal(els['rack-detail-name'].textContent,'第二双鞋');assert.equal(els['rack-detail-next'].disabled,true);assert.equal(app.getState().active,0);app.closeDetail();assert.equal(calls.writes,0);
@@ -53,112 +52,14 @@ test('touch dragging survives implicit capture leaving a garment button, then se
  // bubbling lostpointercapture from that old button; that is not a cancelled drag.
  stage.setPointerCapture=id=>stage.onlostpointercapture({pointerId:id,target:piece});advance(18);stage.onpointermove({...down,clientX:220,preventDefault(){}});advance(18);stage.onpointermove({...down,clientX:80,preventDefault(){}});stage.onpointerup({...down,clientX:80});await flush();assert.equal(app.getState().active,1);assert.equal(app.getState().position,1);assert.notEqual(els['rack-detail'].open,true);assert.equal(els['rack-name'].textContent,'衬衫');
 });
-test('hanger support follows narrow straps instead of a fixed rectangle and remains centred on the rail',()=>{
- const make=(w,h,rects)=>{const a=new Uint8ClampedArray(w*h*4);for(const [x1,y1,x2,y2]of rects)for(let y=y1;y<y2;y++)for(let x=x1;x<x2;x++)a[(y*w+x)*4+3]=255;return a;};
- const gown=R.support(make(120,300,[[35,10,40,65],[80,10,85,65],[30,65,90,299]]),120,300,'dresses');assert.equal(gown.measured,true);assert.equal(gown.kind,'straps');
- const shirt=R.support(make(200,260,[[80,10,120,32],[35,32,165,85],[10,85,190,140],[35,140,165,259]]),200,260,'tops');assert.equal(shirt.kind,'shoulder');
- for(const [w,h]of [[205,330],[260,395],[330,470]]){const a=R.fitting(gown,w,h,'dresses'),b=R.fitting(shirt,w,h,'tops');assert(a.hanger.w<b.hanger.w*.65);assert(Math.abs(a.image.w/a.image.h-gown.aspect)<.001);assert(Math.abs(a.hanger.x+a.hanger.w/2-w/2)<.001);assert(Math.abs(a.image.x+(gown.left+gown.right)/2*a.image.w-w/2)<.001);assert(a.image.y+a.image.h<=h);assert(a.hanger.drop>0);}
- const skirt=R.support(make(120,200,[[20,0,100,200]]),120,200,'bottoms');assert.equal(skirt.kind,'clip');assert.equal(R.fitting(skirt,205,330,'bottoms').hanger.kind,'clip');
- const opaque=new Uint8ClampedArray(120*200*4).fill(255);assert.equal(R.support(opaque,120,200,'dresses').measured,false);
-});
 
-test('shirt hanger arms begin behind the collar and end inside the shoulders in every view',()=>{
- const profile={aspect:.75,left:.12,right:.88,y:.16,neckY:.04,kind:'shoulder',measured:true};
- for(const [w,h] of [[205,330],[260,395],[330,470]]){
-  const f=R.fitting(profile,w,h),apex=3+f.hanger.woodTop;
-  assert(apex>f.image.y+profile.neckY*f.image.h);
-  assert(apex+f.hanger.drop>f.image.y+profile.y*f.image.h);
-  assert(f.hanger.w<(profile.right-profile.left)*f.image.w);
-  assert(3-9+f.hanger.hookHeight>=apex);
+test('floating photos remain centred and uncropped for long dresses and wide tops across screen sizes',()=>{
+ for(const [w,h] of [[205,330],[260,395],[330,470]])for(const aspect of [.22,.7,1.8]){
+ const f=R.floatingFitting(aspect,w,h);assert(f.x>=0&&f.y>=0);assert(f.x+f.w<=w&&f.y+f.h<=h);assert(Math.abs(f.w/f.h-aspect)<.00001);assert(Math.abs(f.x+f.w/2-w/2)<.00001);assert(Math.abs(f.y+f.h/2-h/2)<.00001);
  }
 });
-
-test('uncertain opaque necks retain a collar support; manual preview, cancel, save and restore remain per garment',async()=>{
- const {app,els,prefs,calls}=await ui();await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);
- await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.equal(els['rack-detail'].dataset.calibrating,'true');
- els['rack-neck-shape'].value='v';els['rack-neck-shape'].onchange();const window=els['rack-detail-piece'].neckHanger;assert(window);assert.equal(window.hidden,false);assert.match(window.style.clipPath,/polygon/);assert.equal(els['rack-detail-piece'].neckHandles.filter(b=>!b.hidden).length,3);
- await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail'].dataset.calibrating,'false');assert.equal(window.hidden,false);assert(!prefs.has('wardrobe-rack-neck-v1'));
- await els['rack-neck-toggle'].onclick();els['rack-neck-shape'].value='round';els['rack-neck-shape'].onchange();await els['rack-neck-save'].onclick();assert.equal(JSON.parse(prefs.get('wardrobe-rack-neck-v1')).top.shape,'round');assert.equal(window.hidden,false);
- await app.openDetail(clothes[2],'shoes');assert.equal(els['rack-detail'].dataset.calibrating,'false');assert.equal(window.hidden,true);await app.openDetail(clothes[1]);assert.equal(window.hidden,false);
- await els['rack-neck-toggle'].onclick();await els['rack-neck-auto'].onclick();await els['rack-neck-save'].onclick();assert.equal(window.hidden,false);assert.deepEqual(JSON.parse(prefs.get('wardrobe-rack-neck-v1')),{});assert.equal(calls.writes,0);app.dispose();
-});
-test('transparent neck indentation is detected, while opaque and flat high necks do not invent an opening',()=>{
- const w=100,h=200,a=new Uint8ClampedArray(w*h*4);for(let x=10;x<90;x++){const first=10+Math.max(0,20-Math.abs(x-50));for(let y=first;y<190;y++)a[(y*w+x)*4+3]=255;}
- const n=R.neckline(a,w,h,{left:10,right:89,top:10,bottom:189});assert(n);assert(n.depth>.05);assert(R.neckPoints(n).length>4);
- const opaque=new Uint8ClampedArray(w*h*4).fill(255);assert.equal(R.neckline(opaque,w,h,{left:0,right:99,top:0,bottom:199}),null);
- assert.equal(R.calibration({shape:'v',x:NaN,y:.1,width:.2,depth:.1}),null);assert.equal(R.calibration({shape:'bad',x:.5,y:.1,width:.2,depth:.1}),null);assert.deepEqual(R.neckPoints({shape:'closed'}),[]);
-});
-
-test('saved neck settings survive a fresh app and storage failure leaves the draft available',async()=>{
- const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'v',x:.5,y:.08,width:.2,depth:.1},bad:{shape:'v',x:null}})};const {app,els,host}=await ui({stored});await app.openDetail(clothes[1]);assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);await els['rack-neck-toggle'].onclick();assert.equal(els['rack-neck-shape'].value,'v');assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);host.localStorage.setItem=()=>{throw Error('quota');};await els['rack-neck-save'].onclick();assert.equal(els['rack-neck-editor'].hidden,false);assert.match(els['rack-neck-status'].textContent,/保存失败/);await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-piece'].neckHanger.hidden,false);app.dispose();
-});
-
-test('uncertain neckline fallback stays on the top rim and leaves a visible wood segment at mobile and large sizes',()=>{
- for(const [w,h] of [[205,330],[260,395],[330,470]]){
- const p={aspect:.65,left:.1,right:.9,y:.18,neckY:.09,topY:.05,bodyHeight:.9,collarWidth:.25,kind:'shoulder'},n=R.defaultNeck(p),f=R.fitting({...p,neckY:n.y+Math.min(.012,n.depth*.15)},w,h);
- const apex=3+f.hanger.woodTop,top=f.image.y+p.topY*f.image.h;
- assert(apex>=top-1&&apex<=top+4);assert(f.image.y+(n.y+n.depth)*f.image.h>apex+4);assert(n.depth<.055);assert(n.width<=.30);
- }
- assert.equal(R.defaultNeck({kind:'clip'}),null);assert.equal(R.defaultNeck({kind:'straps'}),null);
-});
-
-test('rabbit hanger keeps its carved proportions and reaches the straps without a floating gap',()=>{
- for(const [w,h] of [[205,330],[260,395],[330,470]]){
-  const a=R.fitting({aspect:.42,left:.28,right:.72,y:.06,kind:'straps'},w,h),b=R.rabbitFitting(a);
-  assert.deepEqual(a.image,b.image);assert(Math.abs(b.hanger.drop/b.hanger.w-506/1881)<.00001);
-  assert(Math.abs(b.hanger.woodTop+b.hanger.drop-a.hanger.woodTop-a.hanger.drop-2)<.001);
- }
- const a=R.fitting({aspect:.6,left:.1,right:.9,y:.02,kind:'clip'},205,330);assert.deepEqual(R.rabbitFitting(a),a);
- assert(fs.existsSync(path.join(root,'assets/rabbit-hanger.webp')));
-});
-
-test('sleeved rabbit hanger hook reaches the neck while the full carving is hidden outside the opening',()=>{
- const a=R.fitting({aspect:.7,left:.1,right:.9,y:.14,neckY:.04,kind:'shoulder'},205,330),b=R.rabbitFitting(a);
- assert(Math.abs(b.hanger.hookHeight-9-b.hanger.joinY)<.001);
- assert(Math.abs(b.hanger.woodTop+b.hanger.w*110/1881-a.hanger.woodTop)<.001);
- const css=fs.readFileSync(path.join(root,'rack.css'),'utf8');assert(css.includes('.hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}'));
-});
-
-test('calibration status distinguishes persisted settings, edits, cancellation and pending automatic restore',async()=>{
- const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'round',x:.5,y:.06,width:.2,depth:.1}})},u=await ui({stored});const {app,els}=u;await app.openDetail(clothes[1]);await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
- els['rack-neck-width'].value='25';els['rack-neck-width'].oninput();assert.match(els['rack-neck-status'].textContent,/本次修改尚未保存/);await els['rack-neck-cancel'].onclick();await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
- await els['rack-neck-auto'].onclick();assert.match(els['rack-neck-status'].textContent,/恢复自动预览.*尚未保存/);await els['rack-neck-save'].onclick();assert.match(els['rack-neck-message'].textContent,/已恢复自动估计/);app.dispose();
-});
-
-test('gold hook endpoint and neck overlay share one attachment point across garment shapes and sizes',()=>{
- for(const kind of ['shoulder','straps'])for(const [w,h]of [[205,330],[260,395],[330,470]])for(const closed of [false,true]){
- const g=R.rabbitFitting(R.fitting({aspect:.65,left:.12,right:.88,y:.13,neckY:.04,kind},w,h),closed);
- const stemEnd=3-9+g.hanger.hookHeight,neckEnd=3+g.hanger.joinY;assert(Math.abs(stemEnd-neckEnd)<.00001);assert(g.hanger.hookHeight>16);
- }
-});
-
-test('hanger style and size persist per garment without changing wardrobe data, cancellation restores saved style',async()=>{
- const u=await ui(),{app,els,prefs,calls}=u;await app.openDetail(clothes[1]);await els['rack-neck-toggle'].onclick();
- els['rack-hanger-style'].value='clip';els['rack-hanger-style'].onchange();els['rack-hanger-scale'].value='70';els['rack-hanger-scale'].oninput();
- assert.equal(els['rack-detail-hanger'].dataset.kind,'clip');assert.equal(els['rack-neck-y'].disabled,false);els['rack-neck-y'].value='8';els['rack-neck-y'].oninput();
- await els['rack-neck-save'].onclick();const saved=JSON.parse(prefs.get('wardrobe-rack-neck-v1'));assert.equal(saved.top.suspension,'clip');assert.equal(saved.top.scale,.7);assert.equal(saved.top.y,.08);assert.equal(calls.writes,0);
- await els['rack-neck-toggle'].onclick();els['rack-hanger-style'].value='hook';els['rack-hanger-style'].onchange();assert.equal(els['rack-detail-hanger'].dataset.kind,'hook');await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-hanger'].dataset.kind,'clip');
- await app.openDetail(clothes[0]);assert.notEqual(els['rack-detail-hanger'].dataset.kind,'clip');app.dispose();
- const fresh=await ui({stored:{'wardrobe-rack-neck-v1':JSON.stringify(saved)}});await fresh.app.openDetail(clothes[1]);assert.equal(fresh.els['rack-detail-hanger'].dataset.kind,'clip');await fresh.els['rack-neck-toggle'].onclick();assert.equal(fresh.els['rack-hanger-scale'].value,'70');await fresh.els['rack-neck-auto'].onclick();await fresh.els['rack-neck-save'].onclick();assert.equal(JSON.parse(fresh.prefs.get('wardrobe-rack-neck-v1')).top,undefined);fresh.app.dispose();
-});
-
-test('resizing the rabbit preserves the photo and keeps its hook joined; clip stem reaches its bar',()=>{
- for(const kind of ['shoulder','straps','clip']){
- const p={aspect:.65,left:.12,right:.88,y:.13,neckY:.04,kind},a=R.fitting(p,260,395),b=R.fitting({...p,hangerScale:.6},260,395);assert.deepEqual(a.image,b.image);assert(Math.abs(b.hanger.w/a.hanger.w-.6)<.00001);
- if(kind==='clip')assert(Math.abs((-9+b.hanger.hookHeight)-(b.hanger.drop+11))<.00001);else{const g=R.rabbitFitting(b);assert(Math.abs(g.hanger.hookHeight-9-g.hanger.joinY)<.00001);}
- }
- const old={shape:'v',x:.5,y:.1,width:.2,depth:.1};assert.deepEqual(R.calibration(old),old);assert.equal(R.calibration({...old,scale:10,suspension:'clip'}).scale,1.3);
-});
-
-test('structure presets give distinct support to scoop necks, puff sleeves, strapless and covered collars',()=>{
- const g={category:'dresses',name:'unnamed'},p={aspect:.6,kind:'shoulder',left:.1,right:.9,y:.12,topY:.03,bodyHeight:.9};
- const scoop=R.structurePreset(g,p,'scoop'),round=R.structurePreset(g,p,'round'),puff=R.structurePreset(g,p,'puff'),clip=R.structurePreset(g,p,'strapless'),covered=R.structurePreset(g,p,'covered');
- assert(scoop.y>round.y);assert(scoop.depth>round.depth);assert(puff.scale<round.scale);assert.equal(clip.suspension,'clip');assert(clip.y>=p.topY&&clip.y<p.topY+.03);assert.equal(covered.suspension,'hook');assert.equal(covered.shape,'closed');
- assert.equal(R.structurePreset(g,p),null);assert.equal(R.structurePreset({...g,name:'pink strapless corset dress'},p).suspension,'clip');assert.equal(R.structurePreset({...g,name:'white puff sleeve dress'},p).scale,.72);assert.equal(R.structurePreset({...g,category:'shoes',name:'strapless'},p),null);
-});
-
-test('explicit clothing structure names auto-fit while saved garment settings take priority',async()=>{
- const records=[{...clothes[0],name:'pink strapless corset midi dress'}],u=await ui({records});await u.app.openDetail(records[0]);assert.equal(u.els['rack-detail-hanger'].dataset.kind,'clip');assert.equal(u.calls.writes,0);
- await u.els['rack-neck-toggle'].onclick();u.els['rack-structure-preset'].value='covered';u.els['rack-structure-preset'].onchange();assert.equal(u.els['rack-detail-hanger'].dataset.kind,'hook');await u.els['rack-neck-save'].onclick();await u.app.openDetail(records[0]);assert.equal(u.els['rack-detail-hanger'].dataset.kind,'hook');
- await u.els['rack-neck-toggle'].onclick();await u.els['rack-neck-auto'].onclick();await u.els['rack-neck-save'].onclick();assert.equal(u.els['rack-detail-hanger'].dataset.kind,'clip');u.app.dispose();
+test('old per-garment calibration cannot add hangers or change floating photos; preview and shelf remain usable',async()=>{
+ const saved={'wardrobe-rack-neck-v1':JSON.stringify({dress:{shape:'v',x:.8,y:.4,width:.6,depth:.3,suspension:'clip',scale:1.3}})},u=await ui({stored:saved}),v=await ui();await u.app.openDetail();await v.app.openDetail();assert.deepEqual(u.els['rack-detail-image'].style,v.els['rack-detail-image'].style);assert.equal(u.calls.writes,0);assert.equal(u.prefs.get('wardrobe-rack-neck-v1'),saved['wardrobe-rack-neck-v1']);
+ for(const b of u.els['rack-pieces'].children)assert.deepEqual(b.children.map(n=>n.className),['garment-photo','loading-label']);
+ const html=fs.readFileSync(path.join(root,'rack.html'),'utf8');assert(!/class="(?:hanger|rail|detail-rail)"|rack-neck-|rack-hanger-|rack-structure-preset/.test(html));assert.equal(u.els['rack-detail-piece'].children.length,0);u.app.closeDetail();await u.els['rack-shoe-row'].children[0].onclick();assert.equal(u.els['rack-detail-name'].textContent,'鞋');u.app.dispose();v.app.dispose();
 });
