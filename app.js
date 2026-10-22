@@ -1,13 +1,15 @@
 (async function () {
   'use strict';
   const C = window.WardrobeCore, DB = window.WardrobeStorage, I = window.WardrobeImages;
+  const K = window.WardrobeColor;
+  let colorScanCancelled = false;
   const $ = id => document.getElementById(id);
   const detailInputs = { brand: 'edit-brand', color: 'edit-color', subcategory: 'edit-subcategory', style: 'edit-style',
     pattern: 'edit-pattern', size: 'edit-size', notes: 'edit-notes', purchasePrice: 'edit-price', currency: 'edit-currency',
     purchaseDate: 'edit-date', purchaseStatus: 'edit-status', originalPrice: 'edit-original-price', purchaseCondition: 'edit-condition',
     purchaseType: 'edit-purchase-type', purchaseSource: 'edit-source' };
   const state = { garments: [], outfits: [], layers: [], background: C.BACKGROUNDS[0],
-    activeId: null, selected: null, category: 'all', brand: '', favorites: false, query: '', sort: 'newest',
+    activeId: null, selected: null, category: 'all', brand: '', colors: [], colorExpanded: false, favorites: false, query: '', sort: 'newest',
     view: 'closet', history: [], future: [], ready: false };
   const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
   let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
@@ -358,6 +360,48 @@
     }
     select.value = state.brand;
   }
+  function colorSelect(select, value) {
+    select.replaceChildren(); for (const c of K.COLORS) { const o = node('option', '', c.label); o.value = c.id; select.append(o); } select.value = value || 'unknown';
+  }
+  function renderColorFilters() {
+    const candidates = state.garments.filter(g => (state.category === 'all' || state.category === g.category) && C.matchesBrand(g, state.brand) && (!state.favorites || g.favorite) && (!state.query || C.matchesGarment(g, state.query)));
+    const list = $('primary-color-list'); list.replaceChildren(); list.dataset.expanded = String(state.colorExpanded);
+    $('expand-colors').textContent = state.colorExpanded ? '收起颜色' : '展开颜色'; $('expand-colors').setAttribute('aria-expanded', String(state.colorExpanded));
+    const add = (id, label, count, hex) => {
+      const b = node('button', 'color-chip'), selected = id === 'all' ? !state.colors.length : state.colors.includes(id); b.type = 'button'; b.dataset.color = id; b.setAttribute('aria-pressed', String(selected)); b.setAttribute('aria-label', label + '，' + count + ' 件' + (selected ? '，已选中' : ''));
+      const dot = node('span', 'color-dot'); dot.dataset.color = id; dot.setAttribute('aria-hidden', 'true'); if (hex) dot.style.backgroundColor = hex;
+      b.append(dot, node('span', '', label), node('span', 'color-chip-count', count));
+      b.onclick = () => { state.colors = id === 'all' ? [] : state.colors.includes(id) ? state.colors.filter(c => c !== id) : [...state.colors, id]; renderCloset(); };
+      list.append(b);
+    };
+    add('all', '全部', candidates.length); for (const c of K.COLORS) add(c.id, c.label, candidates.filter(g => (g.mainColor || 'unknown') === c.id).length, c.hex);
+    const missing = state.garments.filter(g => !g.mainColor).length;
+    $('complete-colors').textContent = missing ? '补全主色（' + missing + '）' : '主色已补全'; $('complete-colors').disabled = !missing;
+    $('primary-color-section').hidden = !state.garments.length;
+  }
+  async function colorSuggestion(file) { return I.suggestColor ? I.suggestColor(file) : { mainColor: 'unknown', colorSource: 'auto' }; }
+  async function completeColors() {
+    if (busy || processing) return;
+    const ids = state.garments.filter(g => !g.mainColor).map(g => g.id); if (!ids.length) return;
+    colorScanCancelled = false; $('color-scan-cancel').hidden = false; $('color-scan-cancel').textContent = '停止补全';
+    let saved = 0, unknown = 0, failed = 0;
+    try {
+      await work('正在分析服装主色…', async () => {
+        for (let i = 0; i < ids.length; i++) {
+          if (colorScanCancelled) break; const before = garment(ids[i]); if (!before || before.mainColor) continue; const revision = before.updatedAt;
+          $('busy-message').textContent = '正在分析主色 ' + (i + 1) + ' / ' + ids.length + ' · 已保存 ' + saved + ' 件';
+          let suggestion;
+          try { let photo; try { photo = await ensureAsset(before, 'thumb'); } catch { photo = await ensureAsset(before, 'image'); } suggestion = await colorSuggestion(photo); } catch { failed++; continue; }
+          if (colorScanCancelled) break; const current = garment(ids[i]); if (!current || current.mainColor || current.updatedAt !== revision) continue;
+          const value = { ...current, ...suggestion, updatedAt: new Date().toISOString() };
+          await DB.write([{ store: 'garments', value }]); state.garments = state.garments.map(g => g.id === value.id ? value : g); saved++; if (value.mainColor === 'unknown') unknown++;
+        }
+      });
+    } finally {
+      $('color-scan-cancel').hidden = true; renderCloset();
+      $('primary-color-status').textContent = (colorScanCancelled ? '已停止。' : '') + '已补全 ' + saved + ' 件，其中 ' + unknown + ' 件待确认。' + (failed ? failed + ' 件图片未能读取，连接同步后可重试。' : '可在单品档案中修改主色。');
+    }
+  }
   function renderValue() {
     const value = C.wardrobeValue(state.garments);
     for (const [id, key] of [['closet-purchase-total', 'purchaseTotal'], ['closet-original-total', 'originalTotal']]) {
@@ -368,20 +412,20 @@
     $('closet-value-note').textContent = value.count ? '已购入 ' + value.count + ' 件 · 实付已记录 ' + value.pricedCount + ' 件 · ' + value.unpricedCount + ' 件未填 · 原价已记录 ' + value.originalCount + ' 件。想买与示例不计入，不同币种分别统计。' : '填写实际购入价后自动汇总。仅统计已购入单品，想买与示例不计入；不同币种分别统计。';
   }
   function renderCloset() {
-    renderTabs(); renderBrands(); renderValue(); $('garment-count').textContent = state.garments.length;
+    renderTabs(); renderBrands(); renderColorFilters(); renderValue(); $('garment-count').textContent = state.garments.length;
     $('favorite-filter').setAttribute('aria-pressed', String(state.favorites));
     let items = state.garments.filter(g => (state.category === 'all' || state.category === g.category) && C.matchesBrand(g, state.brand) &&
-      (!state.favorites || g.favorite) && (!state.query || C.matchesGarment(g, state.query)));
+      (!state.favorites || g.favorite) && K.matches(g, state.colors) && (!state.query || C.matchesGarment(g, state.query)));
     items.sort((a, b) => state.sort === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : state.sort === 'category' ? a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'zh-CN') : b.createdAt.localeCompare(a.createdAt));
     const grid = $('garment-grid'); grid.replaceChildren();
     const allEmpty = state.garments.length === 0;
     $('closet-empty').hidden = !allEmpty; $('no-results').hidden = allEmpty || items.length > 0;
     grid.hidden = allEmpty || items.length === 0; $('closet-tip').hidden = allEmpty || !items.length;
-    const filtering = state.category !== 'all' || state.brand || state.favorites || state.query;
+    const filtering = state.category !== 'all' || state.brand || state.colors.length || state.favorites || state.query;
     $('filter-summary').hidden = !filtering || allEmpty;
     const filteredValue = C.wardrobeValue(items);
     const subtotal = filteredValue.totals.filter(g => g.purchaseTotal !== null).map(g => C.formatMoney(g.purchaseTotal, g.currency)).join('、');
-    $('filter-summary').textContent = '找到 ' + items.length + ' 件单品 · 已购入实付小计：' + (subtotal || '未记录') + (filteredValue.unpricedCount ? ' · ' + filteredValue.unpricedCount + ' 件未填实付价' : '');
+    $('filter-summary').textContent = '找到 ' + items.length + ' 件单品' + (state.colors.length ? ' · 主色：' + state.colors.map(K.label).join('、') : '') + ' · 已购入实付小计：' + (subtotal || '未记录') + (filteredValue.unpricedCount ? ' · ' + filteredValue.unpricedCount + ' 件未填实付价' : '');
     for (const g of items) {
       const card = node('article', 'garment-card'); card.dataset.garmentId = g.id;
       const visual = node('div', 'garment-visual');
@@ -401,7 +445,7 @@
       title.type = 'button'; title.setAttribute('aria-label', '查看藏品档案：' + g.name); title.onclick = () => openArchive(g.id); heading.append(title);
       card.append(visual, heading);
       if (g.brand) card.append(node('p', 'garment-brand', g.brand));
-      const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); card.append(meta);
+      const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); if (g.mainColor) meta.append(node('span', 'garment-color-label', '主色：' + K.label(g.mainColor))); card.append(meta);
       const price = C.formatPrice(g), original = C.formatPrice(g, 'originalPrice');
       if (price || original || g.purchaseStatus === 'wishlist' || g.purchaseCondition || g.purchaseType) {
         const purchase = node('div', 'garment-purchase');
@@ -553,6 +597,8 @@
       const row = node('div', 'upload-row'), img = node('img', 'upload-thumb'); img.src = url(g.thumb); img.alt = '待上传单品预览';
       const info = node('div'), name = node('input'); name.type = 'text'; name.maxLength = 100; name.value = g.name; name.placeholder = stageName(g); name.setAttribute('aria-label', '单品名称，选填'); name.oninput = () => { g.name = name.value; };
       info.append(name, node('p', 'upload-filename', g.filename));
+      const colorLabel = node('label', 'upload-color'), color = node('select'); colorSelect(color, g.mainColor); color.setAttribute('aria-label', '主色分类，可修改自动建议'); color.onchange = () => { g.mainColor = color.value; g.colorSource = 'manual'; };
+      colorLabel.append(node('span', '', '建议主色'), color); info.append(colorLabel);
       const cat = node('select'); categorySelect(cat); cat.value = g.category; cat.setAttribute('aria-label', '选择单品分类'); cat.onchange = () => { g.category = cat.value; name.placeholder = stageName(g); };
       const del = action('移除这张待上传图片', 'close'); del.onclick = () => { staged = staged.filter(x => x.id !== g.id); renderStaged(); cleanupUrls(); };
       row.append(img, info, cat, del); $('upload-list').append(row);
@@ -570,7 +616,8 @@
         $('upload-progress').textContent = '正在整理 ' + (i + 1) + ' / ' + files.length + '…';
         try {
           const prepared = await I.prepare(files[i]), cat = $('batch-category').value;
-          staged.push({ id: C.id(), ...prepared, name: '', category: cat === 'auto' ? C.suggestCategory(files[i].name) : cat,
+          let suggestion; try { suggestion = await colorSuggestion(prepared.thumb || prepared.image); } catch { suggestion = { mainColor: 'unknown', colorSource: 'auto' }; }
+          staged.push({ id: C.id(), ...prepared, ...suggestion, name: '', category: cat === 'auto' ? C.suggestCategory(files[i].name) : cat,
             sequence: state.garments.length + staged.length + 1, filename: files[i].name });
         } catch (error) { errors.push(files[i].name + '：' + error.message); }
       }
@@ -586,10 +633,10 @@
     await work('正在把喜欢的衣服收进衣橱…', async () => {
       const now = new Date().toISOString();
       const records = staged.map(g => ({ id: g.id, image: g.image, thumb: g.thumb, original: g.original, aspect: g.aspect,
-        name: g.name.trim() || stageName(g), category: g.category, ...C.garmentDetails(), favorite: false, demo: false, createdAt: now, updatedAt: now }));
+        name: g.name.trim() || stageName(g), category: g.category, ...C.garmentDetails(g), favorite: false, demo: false, createdAt: now, updatedAt: now }));
       await DB.write(records.map(value => ({ store: 'garments', value })));
       state.garments.push(...records); const count = records.length; staged = [];
-      state.category = 'all'; state.brand = ''; state.favorites = false; state.query = ''; $('search').value = '';
+      state.category = 'all'; state.brand = ''; state.colors = []; state.favorites = false; state.query = ''; $('search').value = '';
       $('upload-dialog').close(); renderCloset(); toast(count + ' 件衣服已放进衣橱。');
     });
   }
@@ -603,6 +650,7 @@
     $('edit-category').value = g.category;
     for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
     for (const [field, inputId] of Object.entries(archiveInputs)) $(inputId).value = editing.archive?.[field] ?? (field === 'verification' ? 'pending' : '');
+    colorSelect($('edit-main-color'), editing.mainColor); $('edit-main-color-note').textContent = editing.colorSource === 'auto' ? '来自图片的建议，可手动修改。' : editing.mainColor ? '已手动选择。' : '尚未分析，可点击重新建议。';
     renderArchivePhotoEditors();
     $('edit-dialog').showModal();
   }
@@ -881,10 +929,16 @@
   listen('batch-category', 'change', () => { const value = $('batch-category').value;
     for (const g of staged) g.category = value === 'auto' ? C.suggestCategory(g.filename) : value; renderStaged(); });
   listen('search', 'input', e => { state.query = e.target.value.trim().toLowerCase(); renderCloset(); });
+  listen('complete-colors', 'click', completeColors);
+  listen('expand-colors', 'click', () => { state.colorExpanded = !state.colorExpanded; renderColorFilters(); });
+  listen('color-scan-cancel', 'click', () => { colorScanCancelled = true; $('color-scan-cancel').textContent = '正在停止…'; });
+  $('busy-overlay').addEventListener('cancel', e => { if (!$('color-scan-cancel').hidden) { e.preventDefault(); colorScanCancelled = true; } });
+  listen('edit-main-color', 'change', () => { if (editing) { editing.mainColor = $('edit-main-color').value; editing.colorSource = 'manual'; $('edit-main-color-note').textContent = '已手动选择，保存档案后生效。'; } });
+  listen('suggest-edit-color', 'click', async () => { if (!editing || busy) return; const target = editing; await work('正在建议主色…', async () => { let photo; try { photo = await ensureAsset(target, 'thumb'); } catch { photo = await ensureAsset(target, 'image'); } const suggestion = await colorSuggestion(photo); if (editing !== target) return; Object.assign(target, suggestion); colorSelect($('edit-main-color'), target.mainColor); $('edit-main-color-note').textContent = '已更新建议，保存档案后生效。'; }); });
   listen('brand-filter', 'change', e => { state.brand = e.target.value; renderCloset(); });
   listen('sort', 'change', e => { state.sort = e.target.value; renderCloset(); });
   listen('favorite-filter', 'click', () => { state.favorites = !state.favorites; renderCloset(); });
-  listen('reset-filters', 'click', () => { state.category = 'all'; state.brand = ''; state.favorites = false; state.query = ''; $('search').value = ''; renderCloset(); });
+  listen('reset-filters', 'click', () => { state.category = 'all'; state.brand = ''; state.colors = []; state.favorites = false; state.query = ''; $('search').value = ''; renderCloset(); });
   listen('undo', 'click', undo); listen('new-outfit', 'click', newOutfit); listen('outfits-new', 'click', newOutfit);
   listen('go-style', 'click', () => setView('closet')); listen('arrange-board', 'click', arrange);
   listen('remove-layer', 'click', removeLayer);

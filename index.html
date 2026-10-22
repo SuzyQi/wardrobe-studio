@@ -10,20 +10,21 @@
   <title>衣橱间 · Wardrobe Studio</title>
   <link rel="icon" href="./favicon.svg?v=20261020-home-icon" type="image/svg+xml">
   <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=20261020-home-icon">
-  <link rel="stylesheet" href="./styles.css?v=20261020-image-bytes">
+  <link rel="stylesheet" href="./styles.css?v=20261022-color">
   <link rel="stylesheet" href="./archive-book.css?v=20261020-compact-record">
   <link rel="stylesheet" href="./archive-index.css?v=20261020-collection-wall">
 <link rel="stylesheet" href="./archive-wall.css?v=20261020-magazine">
   <link rel="stylesheet" href="./archive-layers.css?v=20261020-vellum">
   <link rel="stylesheet" href="./experiment-entry.css?v=20261021-rack">
-  <script src="./core.js?v=20261020-image-bytes" defer></script>
+  <script src="./core.js?v=20261022-color" defer></script>
   <script src="./storage.js?v=20261020-image-bytes" defer></script>
-  <script src="./images.js?v=20261020-image-bytes" defer></script>
+  <script src="./color-core.js?v=20261022-color" defer></script>
+  <script src="./images.js?v=20261022-color" defer></script>
   <script src="./demo.js?v=20261020-image-bytes" defer></script>
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
   <script src="./archive-book.js?v=20261020-magazine" defer></script>
-  <script src="./app.js?v=20261021-rack" defer></script>
+  <script src="./app.js?v=20261022-color" defer></script>
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -60,6 +61,11 @@
       <div class="section-heading"><div><p class="eyebrow">THE COLLECTION</p><h2>我的衣橱 <span class="count" id="garment-count">0</span></h2></div><button id="favorite-filter" class="icon-button" aria-label="只看收藏" aria-pressed="false" title="只看收藏"><svg class="icon"><use href="#i-heart"/></svg></button></div>
       <section class="value-overview" aria-label="衣橱价值统计"><div class="value-metrics"><div><p class="value-label">衣橱实付总额</p><div id="closet-purchase-total" class="value-total"><span class="value-placeholder">暂无记录</span></div></div><div><p class="value-label">原价合计</p><div id="closet-original-total" class="value-total original-total"><span class="value-placeholder">暂无记录</span></div></div></div><p id="closet-value-note" class="value-note">填写实际购入价后自动汇总。</p></section>
       <div class="closet-controls"><label class="search"><svg class="icon"><use href="#i-search"/></svg><input id="search" type="search" placeholder="搜索名称、品牌、颜色、尺码…" aria-label="搜索衣服"></label><select id="sort" aria-label="单品排序"><option value="newest">最近添加</option><option value="name">名称顺序</option><option value="category">按分类</option></select></div>
+      <section id="primary-color-section" class="primary-color-section" aria-label="按主色筛选">
+        <div class="primary-color-heading"><span>主色</span><div><button id="complete-colors" class="text-button" type="button">补全主色</button><button id="expand-colors" class="text-button color-expand" type="button" aria-expanded="false" aria-controls="primary-color-list">展开颜色</button></div></div>
+        <div id="primary-color-list" class="primary-color-list" role="group" aria-label="主色，可多选"></div>
+        <p id="primary-color-status" class="primary-color-status" role="status">可多选颜色，再结合品牌和分类筛选。</p>
+      </section>
       <div class="brand-filter-row"><label for="brand-filter">品牌</label><select id="brand-filter"><option value="">全部品牌</option></select></div>
       <div id="category-tabs" class="category-tabs" aria-label="衣服分类"></div>
       <p id="filter-summary" class="filter-summary" hidden></p>
@@ -121,6 +127,7 @@
       <fieldset class="record-group"><legend>基本信息</legend><div class="record-fields">
         <label for="edit-name">名称<input id="edit-name" maxlength="100" placeholder="例如：The Simone"></label>
         <label for="edit-brand">品牌<input id="edit-brand" maxlength="100" list="brand-suggestions" placeholder="例如：Réalisation Par"></label>
+        <label for="edit-main-color">主色分类<select id="edit-main-color"></select><span id="edit-main-color-note" class="fine-print"></span><button id="suggest-edit-color" class="text-button" type="button">重新建议主色</button></label>
         <label for="edit-color">配色<input id="edit-color" maxlength="80" placeholder="例如：Chocolate Havana"></label>
         <label for="edit-size">尺码<input id="edit-size" maxlength="40" placeholder="例如：XS、UK 8"></label>
         <label for="edit-category">分类<select id="edit-category"></select></label>
@@ -187,7 +194,7 @@
 <dialog id="cloud-conflict-dialog" class="modal cloud-modal" aria-labelledby="cloud-conflict-title"><div class="modal-heading"><h2 id="cloud-conflict-title">选择要保留的版本</h2></div><p class="muted">同一条记录在不同设备上都有修改。选择后再提交；暂停时，双方记录会保持当前状态。</p><div id="cloud-conflict-list" class="cloud-conflict-list"></div><div class="modal-footer"><button id="cloud-conflict-cancel" class="button secondary">暂停同步</button><button id="cloud-resolve" class="button primary">应用选择并同步</button></div></dialog>
 <dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p></dialog>
+<dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p><button id="color-scan-cancel" class="text-button" type="button" hidden>停止补全</button></dialog>
 <noscript><p class="noscript">请在浏览器中启用 JavaScript，才能上传、保存和搭配衣服。</p></noscript>
 </body>
 </html>

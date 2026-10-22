@@ -69,10 +69,18 @@
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     return new Blob([bytes], { type: header.slice(5, header.indexOf(';')) });
   }
+  async function suggestColor(file) {
+    const image = await load(typeof file === 'string' ? fromDataUrl(file) : file);
+    const width = image.naturalWidth || image.width, height = image.naturalHeight || image.height;
+    if (!width || !height) throw new Error('图片无法读取，暂不能判断主色。');
+    const scale = Math.min(1, 96 / Math.max(width, height)), c = canvas(Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))), ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(image, 0, 0, c.width, c.height);
+    return root.WardrobeColor?.analyze(ctx.getImageData(0, 0, c.width, c.height).data, c.width, c.height) || { mainColor: 'unknown', colorSource: 'auto' };
+  }
   function download(blob, filename) {
     const url = URL.createObjectURL(blob), a = document.createElement('a');
     a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 30000);
   }
-  root.WardrobeImages = { load, blob, canvas, prepare, removeLightBackground, dataUrl, fromDataUrl, download };
+  root.WardrobeImages = { load, blob, canvas, prepare, suggestColor, removeLightBackground, dataUrl, fromDataUrl, download };
 })(globalThis);

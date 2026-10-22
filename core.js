@@ -67,6 +67,10 @@
     for (const [field, max] of Object.entries({ brand: 100, color: 80, subcategory: 100, style: 200, pattern: 100, size: 40, purchaseSource: 100, notes: 1500 })) {
       details[field] = typeof source[field] === 'string' ? source[field].trim().slice(0, max) : '';
     }
+    if (source.mainColor) {
+      if (!['white','beige','black','gray','brown','blue','green','yellow','orange','red','pink','purple','gold','silver','multi','unknown'].includes(source.mainColor)) throw new Error('主色分类无效。');
+      details.mainColor = source.mainColor; details.colorSource = source.colorSource === 'auto' ? 'auto' : 'manual';
+    }
     details.purchasePrice = optionalPrice(source.purchasePrice, '实际购入价格');
     details.originalPrice = optionalPrice(source.originalPrice, '原价');
     details.currency = source.currency || 'GBP';

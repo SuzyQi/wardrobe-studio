@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const C = require('../core.js');
+const K = require('../color-core.js');
 const Cloud = require('../cloud.js');
 const Memorial = require('../memorial.js');
 const ArchiveBook = require('../archive-book.js');
@@ -55,7 +56,8 @@ async function start(records, options = {}) {
     prepare: async file => { if (file.type !== 'image/png') throw new Error('不支持的图片'); return { image: file }; },
     canvas: (width, height) => { const lines = [], context = { fillRect() {}, drawImage: (...args) => drawings.push(args), fillText: text => lines.push(text), measureText(text) { return { width: [...text].length * parseInt(this.font) }; } }; return { width, height, lines, getContext: () => context }; },
     blob: async canvas => new Blob([JSON.stringify({ width: canvas.width, height: canvas.height, text: canvas.lines.join('') })], { type: 'image/png' }) };
-  const window = { WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeArchiveBook: ArchiveBook, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
+  I.suggestColor = options.suggestColor || (async () => ({ mainColor: 'blue', colorSource: 'auto' }));
+  const window = { WardrobeColor: K, WardrobeCore: C, WardrobeStorage: DB, WardrobeImages: I, WardrobeMemorial: Memorial, WardrobeArchiveBook: ArchiveBook, WardrobeCloud: options.api ? { ...Cloud, createClient: args => Cloud.createClient({ ...args, fetch: options.api.fetch, minWriteGap: 0 }) } : Cloud,
     sessionStorage: { getItem: key => session.get(key), setItem: (key, value) => session.set(key, value), removeItem: key => session.delete(key) },
     localStorage: { getItem: key => persistent.get(key), setItem: (key, value) => { if (options.blockPersistence) throw new Error('storage blocked'); persistent.set(key, value); }, removeItem: key => persistent.delete(key) }, addEventListener: (type, fn) => { (windowEvents[type] ||= []).push(fn); } };
   await vm.runInNewContext(source, { window, document, Blob, URL: { createObjectURL: blob => { const url = 'blob:test-' + objectUrls.length; objectUrls.push({ url, blob }); return url; }, revokeObjectURL: url => revokedUrls.push(url) }, console: { error: error => errors.push(error) },
@@ -70,6 +72,29 @@ function openRecord(app, index = 0) { find(app.elements['garment-grid'].children
 function openBook(app) { app.navigation.find(button => button.dataset.view === 'book').onclick(); if (app.elements['book-index'].hidden) app.elements['book-directory-toggle'].fire('click'); if (!app.elements['book-show-record'].disabled) app.elements['book-show-record'].fire('click'); }
 function textOf(el) { return [el.textContent || '', ...el.children.map(textOf)].join(' '); }
 function bookGarment() { return { ...oldGarment('g_book'), brand: 'Zimmermann', name: '秀款露背旗袍', purchasePrice: 1500, currency: 'CNY', archive: { year: '2020', season: 'resort', relation: 'runway_match', verification: 'pending', sourceUrl: 'Vogue Runway / 卖家提供', story: '找到这件衣服的故事', photos: [{ id: 'p_runway', kind: 'runway', caption: '秀场参考图', sourceUrl: 'https://example.com/runway' }, { id: 'p_detail', kind: 'detail', caption: '面料与标签', sourceUrl: '' }] }, photo_p_runway: PNG, photo_p_detail: PNG }; }
+
+test('color chips combine colors with OR and brand/category/search with AND; reset restores all clothes', async()=>{
+ const records=[{...oldGarment('blue'),brand:'COS',mainColor:'blue',color:'Navy'},{...oldGarment('white'),brand:'COS',mainColor:'white'},{...oldGarment('pink'),brand:'Other',mainColor:'pink'},oldGarment('pending')],app=await start(records),el=app.elements;
+ const chip=id=>el['primary-color-list'].children.find(b=>b.dataset.color===id),count=()=>el['garment-grid'].children.filter(c=>c.className==='garment-card').length;
+ chip('blue').onclick();assert.equal(count(),1);assert.match(textOf(el['garment-grid']),/blue/);chip('white').onclick();assert.equal(count(),2);
+ el['brand-filter'].value='brand:other';el['brand-filter'].fire('change');assert.equal(count(),0);assert.equal(el['no-results'].hidden,false);chip('all').onclick();assert.equal(count(),1);
+ el['reset-filters'].fire('click');assert.equal(count(),4);chip('unknown').onclick();assert.match(textOf(el['garment-grid']),/pending/);assert.equal(app.writes.length,0);assert.equal(records[0].color,'Navy');assert.deepEqual(app.errors,[]);
+});
+test('bulk color completion preserves manual choices and original color names, and manual correction survives reopening',async()=>{
+ const records=[{...oldGarment('manual'),mainColor:'red',colorSource:'manual'},{...oldGarment('new'),color:'Chocolate Havana'}],app=await start(records),el=app.elements;el['complete-colors'].fire('click');await flush();
+ assert.equal(records[0].mainColor,'red');assert.equal(records[1].mainColor,'blue');assert.equal(records[1].color,'Chocolate Havana');assert.equal(records[1].colorSource,'auto');assert.match(el['primary-color-status'].textContent,/已补全 1 件/);
+ openRecord(app,1);el['edit-main-color'].value='brown';el['edit-main-color'].fire('change');el['edit-form'].fire('submit');await flush();assert.equal(records[1].mainColor,'brown');assert.equal(records[1].colorSource,'manual');assert.equal(records[1].color,'Chocolate Havana');
+ const reload=await start(records);openRecord(reload,1);assert.equal(reload.elements['edit-main-color'].value,'brown');assert.deepEqual(app.errors,[]);
+});
+test('cancelling bulk analysis leaves pending records unchanged; a failed storage write can be retried',async()=>{
+ let resolve;const records=[oldGarment('g1')],app=await start(records,{suggestColor:()=>new Promise(r=>resolve=r)});app.elements['complete-colors'].fire('click');await flush();app.elements['color-scan-cancel'].fire('click');resolve({mainColor:'blue',colorSource:'auto'});await flush();assert.equal(records[0].mainColor,undefined);assert.equal(app.writes.filter(op=>op.store==='garments').length,0);
+ const retry=[oldGarment('retry')],other=await start(retry,{failWrites:1});other.elements['complete-colors'].fire('click');await flush();assert.equal(retry[0].mainColor,undefined);assert.equal(other.elements['complete-colors'].disabled,false);other.elements['complete-colors'].fire('click');await flush();assert.equal(retry[0].mainColor,'blue');
+});
+
+test('new uploads receive automatic main colors and a manual change on the upload card is saved',async()=>{
+ const app=await start([]),el=app.elements;el['batch-category'].value='auto';el['file-input'].files=[Object.assign(new Blob(['photo'],{type:'image/png'}),{name:'blue-dress.png'}),Object.assign(new Blob(['photo'],{type:'image/png'}),{name:'shirt.png'})];el['file-input'].fire('change');await flush();
+ const choose=find(el['upload-list'].children[0],'upload-color').querySelector('select');assert.equal(choose.value,'blue');choose.value='brown';choose.onchange();el['confirm-upload'].fire('click');await flush();assert.equal(app.memory.garments[0].mainColor,'brown');assert.equal(app.memory.garments[0].colorSource,'manual');assert.equal(app.memory.garments[1].mainColor,'blue');assert.equal(app.memory.garments[1].colorSource,'auto');assert.deepEqual(app.errors,[]);
+});
 
 test('the real edit handlers save, reopen, export and restore every record field without losing images', async () => {
   const records = [oldGarment('g_1'), oldGarment('g_2')], app = await start(records);
