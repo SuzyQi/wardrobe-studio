@@ -57,9 +57,12 @@ function rabbitFitting(geo,closed=false){
  const image={...geo.image},hanger={...geo.hanger};
  if(['shoulder','straps'].includes(hanger.kind)){
   const height=hanger.w*506/1881;
-  if(hanger.kind==='straps'){hanger.woodTop+=hanger.drop-height+2;hanger.hookHeight=hanger.woodTop+10;}
+  if(hanger.kind==='straps'){hanger.woodTop+=hanger.drop-height+2;}
   else{hanger.woodTop-=closed?0:hanger.w*110/1881;}
   hanger.drop=height;
+  // One shared attachment point for the gold stem and the exposed neck layer.
+  hanger.joinY=hanger.woodTop+hanger.w*110/1881;
+  hanger.hookHeight=hanger.joinY+9;
  }
  return {...geo,image,hanger};
 }

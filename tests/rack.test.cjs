@@ -114,7 +114,7 @@ test('rabbit hanger keeps its carved proportions and reaches the straps without 
 
 test('sleeved rabbit hanger hook reaches the neck while the full carving is hidden outside the opening',()=>{
  const a=R.fitting({aspect:.7,left:.1,right:.9,y:.14,neckY:.04,kind:'shoulder'},205,330),b=R.rabbitFitting(a);
- assert.equal(b.hanger.hookHeight,a.hanger.hookHeight);
+ assert(Math.abs(b.hanger.hookHeight-9-b.hanger.joinY)<.001);
  assert(Math.abs(b.hanger.woodTop+b.hanger.w*110/1881-a.hanger.woodTop)<.001);
  const css=fs.readFileSync(path.join(root,'rack.css'),'utf8');assert(css.includes('.hanger[data-kind=shoulder] .hanger-wood{visibility:hidden}'));
 });
@@ -123,4 +123,11 @@ test('calibration status distinguishes persisted settings, edits, cancellation a
  const stored={'wardrobe-rack-neck-v1':JSON.stringify({top:{shape:'round',x:.5,y:.06,width:.2,depth:.1}})},u=await ui({stored});const {app,els}=u;await app.openDetail(clothes[1]);await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
  els['rack-neck-width'].value='25';els['rack-neck-width'].oninput();assert.match(els['rack-neck-status'].textContent,/本次修改尚未保存/);await els['rack-neck-cancel'].onclick();await els['rack-neck-toggle'].onclick();assert.match(els['rack-neck-status'].textContent,/已保存的手动校准/);
  await els['rack-neck-auto'].onclick();assert.match(els['rack-neck-status'].textContent,/恢复自动预览.*尚未保存/);await els['rack-neck-save'].onclick();assert.match(els['rack-neck-message'].textContent,/已恢复自动估计/);app.dispose();
+});
+
+test('gold hook endpoint and neck overlay share one attachment point across garment shapes and sizes',()=>{
+ for(const kind of ['shoulder','straps'])for(const [w,h]of [[205,330],[260,395],[330,470]])for(const closed of [false,true]){
+ const g=R.rabbitFitting(R.fitting({aspect:.65,left:.12,right:.88,y:.13,neckY:.04,kind},w,h),closed);
+ const stemEnd=3-9+g.hanger.hookHeight,neckEnd=3+g.hanger.joinY;assert(Math.abs(stemEnd-neckEnd)<.00001);assert(g.hanger.hookHeight>16);
+ }
 });
