@@ -1,0 +1,139 @@
+/* Shared interface palette. Canvas artwork and archive collage geometry stay independent. */
+:root{
+  color-scheme:light;
+  --paper:#f7f6f2;--white:#ffffff;--ink:#30332f;--muted:#70736e;
+  --line:#ddded8;--accent:#24364b;--blue:#24364b;--navy:#24364b;
+  --accent-soft:#efeeea;--soft:#efeeea;--rose:#efeeea;
+  --ui-paper:#f7f6f2;--ui-surface:#efeeea;--ui-ink:#30332f;
+  --ui-muted:#70736e;--ui-line:#ddded8;--ui-navy:#24364b;
+  --ui-selected:#e8edf2;--ui-radius:8px;
+}
+body{background:var(--ui-paper);color:var(--ui-ink)}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,
+textarea:focus-visible,summary:focus-visible,[tabindex]:focus-visible{
+  outline:2px solid var(--ui-navy);outline-offset:4px;
+}
+:where(input,select,textarea){accent-color:var(--ui-navy)}
+:where(input,textarea)::placeholder{color:var(--ui-muted);opacity:1}
+.site-header,.wear-header{border-color:var(--ui-line);background:var(--ui-paper)}
+.site-header nav a,.wear-header nav a,.nav-link{color:var(--ui-muted)}
+.site-header nav [aria-current=page],.wear-header nav [aria-current=page],.nav-link.active{
+  color:var(--ui-navy);border-color:var(--ui-navy);
+}
+.nav-link.active:after{background:var(--ui-navy)}
+.brand small,.wear-brand small,.wordmark span{color:var(--ui-muted)}
+.button,.primary,.quiet,.upload-button{min-height:44px;border-radius:var(--ui-radius)}
+.header-actions .button,.cloud-controls .button,.outfits-view .section-heading .button{min-height:44px}
+.button.primary,.primary,.dark{
+  background:var(--ui-navy);color:#fff;border-color:var(--ui-navy);
+}
+.button.primary:not(:disabled):hover,.primary:not(:disabled):hover,.dark:not(:disabled):hover{
+  background:#1b2a3d;color:#fff;border-color:#1b2a3d;
+}
+.button.secondary,.quiet,.upload-button{
+  background:transparent;border:1px solid var(--ui-line);color:var(--ui-ink);
+}
+.button.secondary:not(:disabled):hover,.quiet:not(:disabled):hover,.upload-button:hover{
+  background:var(--ui-surface);border-color:#b5babd;
+}
+.nav-count,.brand-mark{background:var(--ui-surface);color:var(--ui-navy)}
+.text-button{color:var(--ui-navy)}
+.icon-button{color:var(--ui-muted)}
+.icon-button[aria-pressed=true]{background:var(--ui-selected);color:var(--ui-navy)}
+/* Closet surfaces: calm, consistent image grounds without modifying image pixels. */
+.garment-visual,.upload-thumb,.edit-preview,.garment-picture,
+.rank-row img,.cloud-status-box,.layer-editor,.notice,.value-overview{
+  background:var(--ui-surface);
+}
+.garment-card:hover .garment-visual{background:#e8e7e2;border-color:#b5babd}
+.upload-tile{background:transparent;border-color:#c4c7c2}
+.upload-tile:hover{background:var(--ui-surface)}
+.search{background:var(--ui-surface);color:var(--ui-muted)}
+.search input::placeholder{color:var(--ui-muted)}
+.styling-panel{background:#fff;border-radius:12px;box-shadow:none;border-color:var(--ui-line)}
+.category-tab.active{background:var(--ui-navy);color:#fff}
+.category-tab:not(.active):hover{background:var(--ui-surface)}
+.count{border-color:var(--ui-line)}
+.color-chip{border-color:var(--ui-line);color:var(--ui-ink)}
+.color-chip[aria-pressed=true]{
+  border-color:var(--ui-navy);background:var(--ui-selected);
+  box-shadow:inset 0 0 0 1px var(--ui-navy);
+}
+.color-chip-count,.primary-color-heading,.primary-color-status,
+.garment-color-label,.upload-color{color:var(--ui-muted)}
+.primary-color-heading>div{gap:16px}
+.garment-grid{gap:24px 16px}
+.section-heading{margin-bottom:24px}
+.closet-controls{gap:8px;margin-bottom:16px}
+.category-tabs{gap:8px;margin-bottom:24px}
+.category-tab{min-height:36px}
+.board-actions{gap:8px}
+.board-actions .button{min-height:44px}
+.value-overview{margin-bottom:24px;border-radius:var(--ui-radius)}
+.value-metrics{gap:16px}
+.value-metrics>div+div{padding-left:16px}
+.brand-filter-row{gap:8px;margin-bottom:16px}
+.brand-filter-row select{min-height:44px}
+.record-fields{gap:16px}
+.modal-footer{gap:16px;padding-top:16px;margin-top:24px}
+.modal{border-radius:12px;box-shadow:0 16px 64px #24364b20}
+.modal::backdrop{background:#24364b55}
+.cloud-form input:not([type=checkbox]),.cloud-conflict-row select{
+  background:var(--ui-surface);border-color:var(--ui-line);
+}
+.edit-content input,.edit-content select,.edit-content textarea{
+  background:var(--ui-surface);border-color:var(--ui-line);border-radius:var(--ui-radius);
+}
+.edit-content input,.edit-content select{min-height:44px}
+.card-add{color:var(--ui-navy);box-shadow:none}
+.card-add:hover{background:var(--ui-navy);color:#fff}
+.toast,.wear-toast{background:var(--ui-navy);color:#fff}
+/* Floating browser: retain carousel sizing, transforms, touch behavior and shoe shelf. */
+.filters select{background:#fff;border-color:var(--ui-line);border-radius:var(--ui-radius);min-height:44px}
+.motion-toggle,.rack-footer,.shoe-heading .intro{color:var(--ui-muted)}
+.rack-arrow{background:#f7f6f2eb;border-color:var(--ui-line);color:var(--ui-navy)}
+.rack-arrow:hover{background:var(--ui-selected)}
+.directory button{background:var(--ui-surface);border-color:var(--ui-line);border-radius:var(--ui-radius)}
+.directory button[aria-pressed=true]{background:var(--ui-selected);border-color:var(--ui-navy)}
+body:has(#rack-stage) dialog{background:var(--ui-paper);border-color:var(--ui-line);border-radius:12px}
+body:has(#rack-stage) dialog::backdrop{background:#24364b55}
+.close{background:var(--ui-paper);color:var(--ui-muted)}
+.shoe-card{border-color:var(--ui-line)}
+/* Wear journal: dates retain their own circular geometry and recorded-day indicators. */
+.week-toolbar,.wear-tabs,.wear-footer{border-color:var(--ui-line)}
+.empty{background:var(--ui-surface)}
+.metric,.picker-item{border-color:var(--ui-line);border-radius:var(--ui-radius)}
+.wear-dialog{border-radius:12px}
+.wear-dialog::backdrop{background:#24364b55}
+.piece-dialog .date-cell[data-recorded=true]{background:var(--ui-selected)}
+.piece-dialog .date-cell[aria-pressed=true]{background:var(--ui-navy);color:#fff}
+/* Experiment controls use the shared palette; canvas paper colors and artwork are retained. */
+body:has(.studio) button:not(.primary):not(.dark):not(.garment):not(.layer-name):not(.layer-lock){
+  border-color:var(--ui-line);border-radius:var(--ui-radius);
+}
+body:has(.studio) .toolbar button{min-height:44px}
+body:has(.studio) .toolbar button:not(.primary):not(.dark){background:transparent}
+body:has(.studio) .toolbar button:not(.primary):not(.dark):hover{background:var(--ui-surface)}
+body:has(.studio) .garment{background:var(--ui-surface);border-color:var(--ui-line);border-radius:var(--ui-radius)}
+body:has(.studio) input[type=search],body:has(.studio) input[type=text]{
+  background:#fff;border-color:var(--ui-line);border-radius:var(--ui-radius);min-height:44px;
+}
+body:has(.studio) select{border-color:var(--ui-line);border-radius:var(--ui-radius)}
+body:has(.studio) .layer-name[aria-pressed=true],
+body:has(.studio) .layer-lock[aria-pressed=true]{
+  background:var(--ui-selected);border-color:var(--ui-navy);color:var(--ui-navy);
+}
+.intro-note,.canvas-caption{color:var(--ui-muted)}
+/* Archive pages keep local paper, ink, opacity and collage composition rules. */
+.book-view .button.primary{background:var(--ui-navy);color:#fff}
+@media(min-width:1051px){.workspace{gap:32px}}
+@media(max-width:660px){
+  .button,.primary,.quiet,.upload-button{min-height:44px}
+  .category-tab{min-height:44px}
+  .color-chip{min-height:44px}
+  .garment-grid{gap:24px 12px}
+  .value-overview{margin-bottom:16px}
+  .styling-panel{padding:24px 16px 16px}
+  .record-fields{gap:16px 12px}
+  .edit-content input,.edit-content select,.edit-content textarea{font-size:16px}
+}
