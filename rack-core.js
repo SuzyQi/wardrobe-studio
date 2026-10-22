@@ -36,7 +36,7 @@ function neckline(data,width,height,bounds){
 // An uncertain neckline still gets a small visible collar support, anchored to
 // the actual top of the cutout, never the former fixed chest-level window.
 function defaultNeck(p){if(p.kind!=='shoulder')return null;const body=p.bodyHeight||.9;return {shape:'round',x:(p.left+p.right)/2,y:Math.max(0,(Number.isFinite(p.topY)?p.topY:Math.max(0,(p.neckY||.04)-.035))-.006*body),width:clamp(p.collarWidth||.22,.08,.30),depth:.055*body,confidence:'fallback'};}
-function calibration(value){if(!value||!['round','v','closed'].includes(value.shape))return null;const out={shape:value.shape};for(const [k,a,b]of [['x',.1,.9],['y',0,.55],['width',.02,.65],['depth',.005,.35]]){if(!Number.isFinite(Number(value[k])))return null;out[k]=clamp(Number(value[k]),a,b);}out.width=Math.min(out.width,2*Math.min(out.x,1-out.x));out.depth=Math.min(out.depth,1-out.y);return out;}
+function calibration(value){if(!value||!['auto','round','v','closed'].includes(value.shape))return null;const out={shape:value.shape};for(const [k,a,b]of [['x',.1,.9],['y',0,.55],['width',.02,.65],['depth',.005,.35]]){if(!Number.isFinite(Number(value[k])))return null;out[k]=clamp(Number(value[k]),a,b);}if(['auto','rabbit','clip','hook'].includes(value.suspension))out.suspension=value.suspension;if(Number.isFinite(Number(value.scale)))out.scale=clamp(Number(value.scale),.45,1.3);out.width=Math.min(out.width,2*Math.min(out.x,1-out.x));out.depth=Math.min(out.depth,1-out.y);return out;}
 function neckPoints(n){if(!n||n.shape==='closed')return [];if(n.shape==='contour')return n.points;const {x,y,width:w,depth:h}=n,l=x-w/2,r=x+w/2;return n.shape==='v'?[[l,y],[r,y],[x,y+h]]:[[l,y],[r,y],[r-w*.08,y+h*.6],[x+w*.25,y+h*.92],[x,y+h],[x-w*.25,y+h*.92],[l+w*.08,y+h*.6]];}
 
 function fitting(profile,boxWidth,boxHeight,category='tops'){
@@ -44,12 +44,12 @@ function fitting(profile,boxWidth,boxHeight,category='tops'){
  const imageTop=kind==='hook'?18:29,available=Math.max(10,boxHeight-imageTop-8),w=Math.min(boxWidth,available*aspect),h=w/aspect;
  const center=(p.left+p.right)/2,image={x:boxWidth/2-center*w,y:imageTop,w,h};
  const span=(p.right-p.left)*w,scale=kind==='straps'?1.04:kind==='clip'?.9:kind==='shoulder'?.86:.94;
- const hangerWidth=clamp(span*scale,12,boxWidth*.96),contact=imageTop+p.y*h;
+ const hangerWidth=clamp(span*scale*(p.hangerScale||1),12,boxWidth*.96),contact=imageTop+p.y*h;
  // Shoulder arms sit behind the collar, with their ends buried inside the fabric.
  const neck=kind==='shoulder'?imageTop+(Number.isFinite(p.neckY)?p.neckY:p.y*.25)*h+3:18;
  const woodTop=kind==='shoulder'?neck-3:15,drop=kind==='shoulder'?Math.max(7,contact+5-neck):Math.max(7,contact-18);
  const hangerCenter=Number.isFinite(p.hangerX)?image.x+p.hangerX*w:boxWidth/2;
- return {image,hanger:{x:hangerCenter-hangerWidth/2,w:hangerWidth,woodTop,hookHeight:kind==='shoulder'?neck+6:kind==='hook'?32:25,drop,kind},measured:!!p.measured};
+ return {image,hanger:{x:hangerCenter-hangerWidth/2,w:hangerWidth,woodTop,hookHeight:kind==='shoulder'?neck+6:kind==='hook'?Math.max(32,contact+6):drop+20,drop,kind},measured:!!p.measured};
 }
 
 

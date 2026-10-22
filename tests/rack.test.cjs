@@ -131,3 +131,21 @@ test('gold hook endpoint and neck overlay share one attachment point across garm
  const stemEnd=3-9+g.hanger.hookHeight,neckEnd=3+g.hanger.joinY;assert(Math.abs(stemEnd-neckEnd)<.00001);assert(g.hanger.hookHeight>16);
  }
 });
+
+test('hanger style and size persist per garment without changing wardrobe data, cancellation restores saved style',async()=>{
+ const u=await ui(),{app,els,prefs,calls}=u;await app.openDetail(clothes[1]);await els['rack-neck-toggle'].onclick();
+ els['rack-hanger-style'].value='clip';els['rack-hanger-style'].onchange();els['rack-hanger-scale'].value='70';els['rack-hanger-scale'].oninput();
+ assert.equal(els['rack-detail-hanger'].dataset.kind,'clip');assert.equal(els['rack-neck-y'].disabled,false);els['rack-neck-y'].value='8';els['rack-neck-y'].oninput();
+ await els['rack-neck-save'].onclick();const saved=JSON.parse(prefs.get('wardrobe-rack-neck-v1'));assert.equal(saved.top.suspension,'clip');assert.equal(saved.top.scale,.7);assert.equal(saved.top.y,.08);assert.equal(calls.writes,0);
+ await els['rack-neck-toggle'].onclick();els['rack-hanger-style'].value='hook';els['rack-hanger-style'].onchange();assert.equal(els['rack-detail-hanger'].dataset.kind,'hook');await els['rack-neck-cancel'].onclick();assert.equal(els['rack-detail-hanger'].dataset.kind,'clip');
+ await app.openDetail(clothes[0]);assert.notEqual(els['rack-detail-hanger'].dataset.kind,'clip');app.dispose();
+ const fresh=await ui({stored:{'wardrobe-rack-neck-v1':JSON.stringify(saved)}});await fresh.app.openDetail(clothes[1]);assert.equal(fresh.els['rack-detail-hanger'].dataset.kind,'clip');await fresh.els['rack-neck-toggle'].onclick();assert.equal(fresh.els['rack-hanger-scale'].value,'70');await fresh.els['rack-neck-auto'].onclick();await fresh.els['rack-neck-save'].onclick();assert.equal(JSON.parse(fresh.prefs.get('wardrobe-rack-neck-v1')).top,undefined);fresh.app.dispose();
+});
+
+test('resizing the rabbit preserves the photo and keeps its hook joined; clip stem reaches its bar',()=>{
+ for(const kind of ['shoulder','straps','clip']){
+ const p={aspect:.65,left:.12,right:.88,y:.13,neckY:.04,kind},a=R.fitting(p,260,395),b=R.fitting({...p,hangerScale:.6},260,395);assert.deepEqual(a.image,b.image);assert(Math.abs(b.hanger.w/a.hanger.w-.6)<.00001);
+ if(kind==='clip')assert(Math.abs((-9+b.hanger.hookHeight)-(b.hanger.drop+11))<.00001);else{const g=R.rabbitFitting(b);assert(Math.abs(g.hanger.hookHeight-9-g.hanger.joinY)<.00001);}
+ }
+ const old={shape:'v',x:.5,y:.1,width:.2,depth:.1};assert.deepEqual(R.calibration(old),old);assert.equal(R.calibration({...old,scale:10,suspension:'clip'}).scale,1.3);
+});
