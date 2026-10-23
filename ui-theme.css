@@ -208,3 +208,24 @@ body:has(.studio) .layer-lock[aria-pressed=true]{
 @media(max-width:660px){
   #garment-grid .garment-color-label{font-size:12px;margin-top:4px}
 }
+/* Brand choices are sourced from this device's wardrobe plus four requested options. */
+#edit-brand-choice{width:100%}
+.upload-info{min-width:0}
+.upload-brand{display:grid;grid-template-columns:1fr;gap:6px;margin-top:10px;min-width:0}
+.upload-brand-label{font-size:11px;color:var(--ui-muted)}
+.upload-row .upload-brand select,.upload-row .upload-brand input{
+  width:100%;max-width:100%;min-width:0;min-height:38px;margin:0;padding:7px 9px;
+  border:1px solid var(--ui-line);border-radius:var(--ui-radius);background:#fff;font-size:12px;
+}
+#upload-list .upload-row{align-items:start}
+@media(max-width:660px){
+  #upload-list .upload-row{grid-template-columns:48px minmax(0,1fr) 32px;gap:8px;padding:10px}
+  #upload-list .upload-row>.upload-thumb{grid-column:1;grid-row:1 / 3;width:48px}
+  #upload-list .upload-info{grid-column:2;grid-row:1}
+  #upload-list .upload-row>select{grid-column:2;grid-row:2;width:100%;min-height:44px;font-size:16px;padding:8px}
+  #upload-list .upload-row>.icon-button{grid-column:3;grid-row:1;width:32px;height:44px}
+  #upload-list .upload-info>input{font-size:16px;min-height:44px}
+  #upload-list .upload-brand select,#upload-list .upload-brand input{font-size:16px;min-height:44px}
+  #upload-list .upload-color{font-size:12px;flex-wrap:wrap}
+  #upload-list .upload-color select{font-size:16px!important;min-height:44px}
+}

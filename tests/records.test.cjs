@@ -14,6 +14,44 @@ const root = path.resolve(__dirname, '..');
 const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
 const source = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
 const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a0f8AAAAASUVORK5CYII=';
+
+test('brand choices include requested brands and existing names, and choosing or typing a brand persists', async () => {
+  const records = [{ ...oldGarment('first'), brand: 'COS' }, { ...oldGarment('second'), brand: 'COS' }];
+  const app = await start(records), el = app.elements; openRecord(app);
+  const labels = el['edit-brand-choice'].children.map(o => o.value);
+  for (const brand of ['Gucci', 'Chanel', 'UNIQLO', 'Crocs', 'COS']) assert.ok(labels.includes(brand), brand);
+  assert.equal(labels[1], 'COS');
+  el['edit-brand-choice'].value = 'Gucci'; el['edit-brand-choice'].fire('change');
+  assert.equal(el['edit-brand'].value, 'Gucci');
+  el['edit-form'].fire('submit'); await flush();
+  assert.equal(records[0].brand, 'Gucci'); assert.equal(records[1].brand, 'COS');
+  assert.ok(el['brand-filter'].children.some(o => o.value === 'brand:gucci'));
+  const reloaded = await start(records); openRecord(reloaded);
+  assert.equal(reloaded.elements['edit-brand-choice'].value, 'Gucci');
+  reloaded.elements['edit-brand-choice'].value = '__custom__'; reloaded.elements['edit-brand-choice'].fire('change');
+  assert.equal(reloaded.elements['edit-brand'].hidden, false);
+  reloaded.elements['edit-brand'].value = 'Independent Studio'; reloaded.elements['edit-brand'].fire('input');
+  assert.equal(reloaded.elements['edit-brand-choice'].value, '__custom__');
+  reloaded.elements['edit-form'].fire('submit'); await flush();
+  assert.equal(records[0].brand, 'Independent Studio');
+  const again = await start(records); openRecord(again);
+  assert.equal(again.elements['edit-brand-choice'].value, 'Independent Studio');
+  assert.deepEqual(app.errors, []); assert.deepEqual(reloaded.errors, []); assert.deepEqual(again.errors, []);
+});
+test('upload cards save a selected brand and a manually entered new brand independently', async () => {
+  const app = await start([]), el = app.elements; el['batch-category'].value = 'auto';
+  el['file-input'].files = ['dress.png', 'shirt.png'].map(name => Object.assign(new Blob(['photo'], { type: 'image/png' }), { name }));
+  el['file-input'].fire('change'); await flush();
+  const first = find(el['upload-list'].children[0], 'upload-brand'), second = find(el['upload-list'].children[1], 'upload-brand');
+  first.querySelector('select').value = 'Chanel'; first.querySelector('select').fire('change');
+  second.querySelector('select').value = '__custom__'; second.querySelector('select').fire('change');
+  second.querySelector('input').value = 'New Label'; second.querySelector('input').fire('input');
+  el['confirm-upload'].fire('click'); await flush();
+  assert.equal(app.memory.garments[0].brand, 'Chanel'); assert.equal(app.memory.garments[1].brand, 'New Label');
+  assert.ok(el['brand-filter'].children.some(o => o.value === 'brand:chanel'));
+  assert.ok(el['brand-filter'].children.some(o => o.value === 'brand:new label'));
+  assert.deepEqual(app.errors, []);
+});
 const oldGarment = id => ({ id, name: id, category: 'dresses', color: '', notes: '', aspect: .7, image: PNG, thumb: PNG, original: PNG, createdAt: '2024-01-01', updatedAt: '2024-01-01' });
 class Element {
   constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.events = {}; this.attributes = {}; this.style = { setProperty() {} }; this.classList = { toggle() {}, add() {}, remove() {} }; this.value = ''; this.isConnected = false; }

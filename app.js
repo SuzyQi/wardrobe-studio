@@ -349,6 +349,32 @@
       $('category-tabs').append(b);
     }
   }
+  const addedBrandChoices = ['Gucci', 'Chanel', 'UNIQLO', 'Crocs'];
+  function brandChoices() {
+    const used = C.brandOptions([...state.garments, ...staged]).filter(b => b.value !== 'unbranded');
+    return C.brandOptions([...used.map(b => ({ brand: b.label })), ...addedBrandChoices.map(brand => ({ brand }))])
+      .map(b => ({ ...b, count: used.find(x => x.value === b.value)?.count || 0 }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'zh-CN'));
+  }
+  function bindBrandChoice(select, input, value, onChange) {
+    const choices = brandChoices();
+    select.replaceChildren();
+    const empty = node('option', '', '选择品牌（可选）'); empty.value = ''; select.append(empty);
+    for (const brand of choices) { const option = node('option', '', brand.label); option.value = brand.label; select.append(option); }
+    const custom = node('option', '', '其他品牌，手动输入'); custom.value = '__custom__'; select.append(custom);
+    input.value = value || '';
+    const syncSelection = () => {
+      const selected = choices.find(b => C.matchesBrand({ brand: input.value }, b.value));
+      select.value = selected ? selected.label : input.value.trim() ? '__custom__' : '';
+    };
+    syncSelection(); input.hidden = select.value !== '__custom__';
+    select.onchange = () => {
+      input.hidden = select.value !== '__custom__';
+      if (select.value === '__custom__') { input.focus?.(); return; }
+      input.value = select.value; onChange?.(input.value);
+    };
+    input.oninput = () => { syncSelection(); onChange?.(input.value); };
+  }
   function renderBrands() {
     const options = C.brandOptions(state.garments), select = $('brand-filter');
     if (state.brand && !options.some(b => b.value === state.brand)) state.brand = '';
@@ -356,9 +382,10 @@
     $('brand-suggestions').replaceChildren();
     for (const brand of options) {
       const opt = node('option', '', brand.label + '（' + brand.count + '）'); opt.value = brand.value; select.append(opt);
-      if (brand.value !== 'unbranded') { const suggestion = node('option'); suggestion.value = brand.label; $('brand-suggestions').append(suggestion); }
+
     }
     select.value = state.brand;
+    for (const brand of brandChoices()) { const suggestion = node('option'); suggestion.value = brand.label; $('brand-suggestions').append(suggestion); }
   }
   function colorSelect(select, value) {
     select.replaceChildren(); for (const c of K.COLORS) { const o = node('option', '', c.label); o.value = c.id; select.append(o); } select.value = value || 'unknown';
@@ -604,10 +631,15 @@
     $('upload-list').replaceChildren();
     for (const g of staged) {
       const row = node('div', 'upload-row'), img = node('img', 'upload-thumb'); img.src = url(g.thumb); img.alt = '待上传单品预览';
-      const info = node('div'), name = node('input'); name.type = 'text'; name.maxLength = 100; name.value = g.name; name.placeholder = stageName(g); name.setAttribute('aria-label', '单品名称，选填'); name.oninput = () => { g.name = name.value; };
+      const info = node('div', 'upload-info'), name = node('input'); name.type = 'text'; name.maxLength = 100; name.value = g.name; name.placeholder = stageName(g); name.setAttribute('aria-label', '单品名称，选填'); name.oninput = () => { g.name = name.value; };
       info.append(name, node('p', 'upload-filename', g.filename));
       const colorLabel = node('label', 'upload-color'), color = node('select'); colorSelect(color, g.mainColor); color.setAttribute('aria-label', '主色分类，可修改自动建议'); color.onchange = () => { g.mainColor = color.value; g.colorSource = 'manual'; };
       colorLabel.append(node('span', '', '建议主色'), color); info.append(colorLabel);
+      const brandGroup = node('div', 'upload-brand'), brandSelect = node('select'), brandInput = node('input');
+      brandSelect.setAttribute('aria-label', '选择品牌'); brandInput.type = 'text'; brandInput.maxLength = 100;
+      brandInput.placeholder = '或输入其他品牌'; brandInput.setAttribute('aria-label', '手动输入品牌'); brandInput.setAttribute('list', 'brand-suggestions');
+      bindBrandChoice(brandSelect, brandInput, g.brand, value => { g.brand = value; });
+      brandGroup.append(node('span', 'upload-brand-label', '品牌'), brandSelect, brandInput); info.append(brandGroup);
       const cat = node('select'); categorySelect(cat); cat.value = g.category; cat.setAttribute('aria-label', '选择单品分类'); cat.onchange = () => { g.category = cat.value; name.placeholder = stageName(g); };
       const del = action('移除这张待上传图片', 'close'); del.onclick = () => { staged = staged.filter(x => x.id !== g.id); renderStaged(); cleanupUrls(); };
       row.append(img, info, cat, del); $('upload-list').append(row);
@@ -658,6 +690,7 @@
     $('edit-image').removeAttribute('src'); showAsset($('edit-image'), editing, 'image'); $('edit-name').value = g.name;
     $('edit-category').value = g.category;
     for (const [field, inputId] of Object.entries(detailInputs)) $(inputId).value = editing[field] ?? '';
+    bindBrandChoice($('edit-brand-choice'), $('edit-brand'), editing.brand);
     for (const [field, inputId] of Object.entries(archiveInputs)) $(inputId).value = editing.archive?.[field] ?? (field === 'verification' ? 'pending' : '');
     colorSelect($('edit-main-color'), editing.mainColor); $('edit-main-color-note').textContent = editing.colorSource === 'auto' ? '来自图片的建议，可手动修改。' : editing.mainColor ? '已手动选择。' : '尚未分析，可点击重新建议。';
     renderArchivePhotoEditors();

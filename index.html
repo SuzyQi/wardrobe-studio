@@ -24,8 +24,8 @@
   <script src="./cloud.js?v=20261020-image-bytes" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
   <script src="./archive-book.js?v=20261020-magazine" defer></script>
-  <script src="./app.js?v=20261023-color-rows" defer></script>
-<link rel="stylesheet" href="./ui-theme.css?v=20261023-color-rows">
+  <script src="./app.js?v=20261023-brand-choice" defer></script>
+<link rel="stylesheet" href="./ui-theme.css?v=20261023-brand-choice">
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -127,7 +127,7 @@
       <p class="record-hint">以下内容均可选填，随时补充。</p>
       <fieldset class="record-group"><legend>基本信息</legend><div class="record-fields">
         <label for="edit-name">名称<input id="edit-name" maxlength="100" placeholder="例如：The Simone"></label>
-        <label for="edit-brand">品牌<input id="edit-brand" maxlength="100" list="brand-suggestions" placeholder="例如：Réalisation Par"></label>
+        <label for="edit-brand-choice">品牌<select id="edit-brand-choice" aria-label="选择品牌"></select><input id="edit-brand" aria-label="手动输入品牌" maxlength="100" list="brand-suggestions" placeholder="或输入其他品牌"></label>
         <label for="edit-main-color">主色分类<select id="edit-main-color"></select><span id="edit-main-color-note" class="fine-print"></span><button id="suggest-edit-color" class="text-button" type="button">重新建议主色</button></label>
         <label for="edit-color">配色<input id="edit-color" maxlength="80" placeholder="例如：Chocolate Havana"></label>
         <label for="edit-size">尺码<input id="edit-size" maxlength="40" placeholder="例如：XS、UK 8"></label>
