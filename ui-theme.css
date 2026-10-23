@@ -197,3 +197,14 @@ body:has(.studio) .layer-lock[aria-pressed=true]{
   #workspace .closet-tip{font-size:12px;line-height:1.7;margin-top:24px}
   #workspace .closet-panel>.section-heading .icon-button{width:44px;height:44px}
 }
+/* Category and color are independent card rows on every screen width. */
+#garment-grid .garment-color-label{
+  display:flex;align-items:center;gap:6px;margin:4px 0 0;
+  font-size:11px;line-height:1.6;color:var(--ui-muted);
+}
+#garment-grid .garment-color-dot{
+  width:10px;height:10px;flex:0 0 10px;border-color:#30332f26;
+}
+@media(max-width:660px){
+  #garment-grid .garment-color-label{font-size:12px;margin-top:4px}
+}

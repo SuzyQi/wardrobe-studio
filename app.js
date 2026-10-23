@@ -445,7 +445,16 @@
       title.type = 'button'; title.setAttribute('aria-label', '查看藏品档案：' + g.name); title.onclick = () => openArchive(g.id); heading.append(title);
       card.append(visual, heading);
       if (g.brand) card.append(node('p', 'garment-brand', g.brand));
-      const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.color, g.size].filter(Boolean).join(' · '))); if (g.mainColor) meta.append(node('span', 'garment-color-label', '主色：' + K.label(g.mainColor))); card.append(meta);
+      const meta = node('div', 'garment-meta'); meta.append(node('span', '', [g.subcategory || C.categoryLabel(g.category), g.size].filter(Boolean).join(' · '))); card.append(meta);
+      if (g.mainColor || g.color) {
+        const color = K.COLORS.find(c => c.id === g.mainColor), originalColor = (g.color || '').trim();
+        const shortLabel = K.label(g.mainColor);
+        const colorName = g.mainColor ? (['multi', 'unknown'].includes(g.mainColor) || shortLabel.endsWith('色') ? shortLabel : shortLabel + '色') : originalColor;
+        const detail = g.mainColor && originalColor && originalColor !== colorName && originalColor !== shortLabel ? ' · ' + originalColor : '';
+        const colorRow = node('p', 'garment-color-label'), dot = node('span', 'color-dot garment-color-dot');
+        dot.dataset.color = color?.id || 'unknown'; dot.setAttribute('aria-hidden', 'true'); if (color?.hex) dot.style.backgroundColor = color.hex;
+        colorRow.append(dot, node('span', '', colorName + detail)); card.append(colorRow);
+      }
       const price = C.formatPrice(g), original = C.formatPrice(g, 'originalPrice');
       if (price || original || g.purchaseStatus === 'wishlist' || g.purchaseCondition || g.purchaseType) {
         const purchase = node('div', 'garment-purchase');
