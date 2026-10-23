@@ -137,3 +137,63 @@ body:has(.studio) .layer-lock[aria-pressed=true]{
   .record-fields{gap:16px 12px}
   .edit-content input,.edit-content select,.edit-content textarea{font-size:16px}
 }
+
+/* Mobile closet: two clear columns, readable metadata, compact icons with full touch targets. */
+@media(max-width:660px){
+  #workspace .closet-controls{align-items:stretch;gap:8px}
+  #workspace .search{height:44px;padding:0 12px}
+  #workspace .search input{font-size:16px}
+  #workspace .closet-controls select{font-size:12px;min-height:44px;max-width:105px}
+  #workspace .primary-color-heading{font-size:12px}
+  #workspace .primary-color-heading .text-button{font-size:12px;min-height:44px}
+  #workspace .primary-color-heading>div{gap:12px}
+  #workspace .color-chip{font-size:12px}
+  #workspace .color-chip-count{font-size:11px}
+  #workspace .primary-color-status,#workspace .filter-summary{font-size:12px;line-height:1.7}
+  #workspace .brand-filter-row{font-size:12px;gap:12px}
+  #workspace .brand-filter-row select{font-size:16px;flex:1;max-width:260px}
+  #workspace .category-tabs{gap:4px;margin-bottom:24px}
+  #workspace .category-tab{font-size:12px;padding:8px 12px}
+  #workspace .value-label{font-size:12px}
+  #workspace .value-placeholder{font-size:13px}
+  #workspace .value-note{font-size:11px;line-height:1.7}
+  #garment-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 12px}
+  #garment-grid .garment-visual,#garment-grid .upload-tile{aspect-ratio:3/4;border-radius:10px}
+  #garment-grid .garment-image-button{padding:24px 12px 32px}
+  #garment-grid .garment-image-button img{object-fit:contain}
+  #garment-grid .garment-name{font-size:14px;line-height:1.5;margin-top:12px;white-space:normal;overflow:visible}
+  #garment-grid .garment-title{
+    display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;
+    white-space:normal;overflow:hidden;overflow-wrap:anywhere;
+    min-height:0;line-height:1.5;font-weight:500;align-content:start;
+  }
+  #garment-grid .garment-brand{font-size:12px;line-height:1.6;margin-top:4px}
+  #garment-grid .garment-meta{display:block;font-size:12px;line-height:1.6;margin-top:4px}
+  #garment-grid .garment-color-label{font-size:12px;line-height:1.6;margin-top:2px}
+  #garment-grid .garment-purchase{gap:6px;margin-top:8px}
+  #garment-grid .garment-price{font-size:13px;line-height:1.6}
+  #garment-grid .garment-original{font-size:12px}
+  #garment-grid .purchase-badge{font-size:11px;padding:2px 7px}
+  #garment-grid .card-favorite,#garment-grid .card-edit,#garment-grid .card-add{
+    width:44px;height:44px;isolation:isolate;background:transparent;
+    border-radius:50%;box-shadow:none;color:var(--ui-muted);
+  }
+  #garment-grid .card-favorite,#garment-grid .card-edit{top:0}
+  #garment-grid .card-favorite{left:0}
+  #garment-grid .card-edit{right:0}
+  #garment-grid .card-add{right:0;bottom:0;color:var(--ui-navy);z-index:2}
+  #garment-grid .card-favorite::before,#garment-grid .card-edit::before,#garment-grid .card-add::before{
+    content:'';position:absolute;inset:6px;z-index:-1;border-radius:50%;background:#f7f6f2ed;
+  }
+  #garment-grid .card-favorite[aria-pressed=true]{color:var(--ui-navy)}
+  #garment-grid .card-favorite[aria-pressed=true]::before{background:var(--ui-selected)}
+  #garment-grid .card-edit:hover::before{background:var(--ui-selected)}
+  #garment-grid .card-add:hover{color:#fff}
+  #garment-grid .card-add:hover::before{background:var(--ui-navy)}
+  #garment-grid .icon-button .icon{width:17px;height:17px}
+  #garment-grid .card-add .icon{width:20px;height:20px}
+  #garment-grid .demo-badge{font-size:9px;left:10px;bottom:12px}
+  #garment-grid .upload-tile{font-size:13px;gap:12px}
+  #workspace .closet-tip{font-size:12px;line-height:1.7;margin-top:24px}
+  #workspace .closet-panel>.section-heading .icon-button{width:44px;height:44px}
+}
