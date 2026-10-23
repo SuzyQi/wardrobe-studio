@@ -62,11 +62,18 @@
     if (!Number.isFinite(price) || price > 999999999.99) throw new Error(label + '超出可记录范围。');
     return price;
   }
+  function formatBrand(value) {
+    if (typeof value !== 'string') return '';
+    const acronyms = { cb: 'CB', cos: 'COS', ysl: 'YSL', lk: 'LK' };
+    return value.trim().replace(/\s+/g, ' ').toLowerCase().replace(/\p{L}[\p{L}\p{M}]*/gu, word =>
+      Object.hasOwn(acronyms, word) ? acronyms[word] : word.charAt(0).toUpperCase() + word.slice(1));
+  }
   function garmentDetails(source = {}) {
     const details = {};
     for (const [field, max] of Object.entries({ brand: 100, color: 80, subcategory: 100, style: 200, pattern: 100, size: 40, purchaseSource: 100, notes: 1500 })) {
       details[field] = typeof source[field] === 'string' ? source[field].trim().slice(0, max) : '';
     }
+    details.brand = formatBrand(details.brand);
     if (source.mainColor) {
       if (!['white','beige','black','gray','brown','blue','green','yellow','orange','red','pink','purple','gold','silver','multi','unknown'].includes(source.mainColor)) throw new Error('主色分类无效。');
       details.mainColor = source.mainColor; details.colorSource = source.colorSource === 'auto' ? 'auto' : 'manual';
@@ -99,7 +106,7 @@
     const brands = new Map();
     for (const g of garments) {
       const key = folded(g.brand), value = key ? 'brand:' + key : 'unbranded';
-      if (!brands.has(value)) brands.set(value, { value, label: key ? g.brand.trim().replace(/\s+/g, ' ') : '未填写品牌', count: 0 });
+      if (!brands.has(value)) brands.set(value, { value, label: key ? formatBrand(g.brand) : '未填写品牌', count: 0 });
       brands.get(value).count++;
     }
     return [...brands.values()].sort((a, b) => a.value === 'unbranded' ? 1 : b.value === 'unbranded' ? -1 : a.label.localeCompare(b.label, 'zh-CN'));
@@ -235,6 +242,6 @@
   function removeGarmentReferences(outfits, garmentId) {
     return outfits.map(o => ({ ...o, layers: o.layers.filter(l => l.garmentId !== garmentId) }));
   }
-  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, PURCHASE_CONDITIONS, PURCHASE_TYPES, SEASONS, RELATIONS, PHOTO_KINDS, sourceUrl, archiveDetails, imageFields, garmentDetails, formatMoney, formatPrice, matchesGarment, brandOptions, matchesBrand, wardrobeValue, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
+  return { WIDTH, HEIGHT, CATEGORIES, CAT_IDS, CURRENCIES, PURCHASE_STATUSES, PURCHASE_CONDITIONS, PURCHASE_TYPES, SEASONS, RELATIONS, PHOTO_KINDS, sourceUrl, archiveDetails, imageFields, formatBrand, garmentDetails, formatMoney, formatPrice, matchesGarment, brandOptions, matchesBrand, wardrobeValue, BACKGROUNDS, normalizeBackground, boardInk, clamp, id, categoryLabel, suggestCategory,
     defaultName, alphaBounds, defaultLayer, positionLayer, validateBackup, removeGarmentReferences };
 });

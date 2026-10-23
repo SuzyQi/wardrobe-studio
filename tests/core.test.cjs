@@ -144,3 +144,12 @@ test('brand filters merge case, spacing and accents while keeping distinct brand
   assert.equal(C.matchesBrand(garments[3], 'brand:cos'), false);
   assert.ok(C.matchesBrand(garments[4], 'unbranded'));
 });
+test('brand formatting uses initial capitals without removing accents, punctuation or Chinese names', () => {
+  for (const [raw, expected] of [[' paloma   wool ', 'Paloma Wool'], ['SHIATZY CHEN', 'Shiatzy Chen'], ['Dolce & GABBANA', 'Dolce & Gabbana'], ['needle and thread', 'Needle And Thread'], ['Maison margiela', 'Maison Margiela'], ['Miu miu', 'Miu Miu'], ['réalisation par', 'Réalisation Par'], ['house of cb', 'House Of CB'], ['lk bennett', 'LK Bennett'], ['ysl', 'YSL'], ['uniqlo', 'Uniqlo'], ['本地品牌', '本地品牌'], ['', '']]) {
+    assert.equal(C.formatBrand(raw), expected);
+    assert.equal(C.formatBrand(expected), expected, 'normalization is idempotent');
+    assert.equal(C.garmentDetails({ brand: raw }).brand, expected);
+  }
+  const options = C.brandOptions([{brand:'paloma wool'}, {brand:'PALOMA WOOL'}]);
+  assert.deepEqual(options, [{value:'brand:paloma wool', label:'Paloma Wool', count:2}]);
+});

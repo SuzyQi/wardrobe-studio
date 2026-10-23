@@ -1,4 +1,4 @@
-(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./experiment-core.js'));else root.CollageApp=factory(root.CollageLab);if(typeof document!=='undefined')root.CollageApp.create({document,host:root,wardrobe:root.WardrobeStorage,cloud:root.WardrobeCloud,imaging:root.WardrobeImages,renderer:root.CollageRenderer,store:root.CollageStore}).catch(e=>{const el=document.getElementById('error');el.hidden=false;el.textContent='实验页未完成打开：'+e.message;});})(typeof globalThis!=='undefined'?globalThis:this,function(C){
+(function(root,factory){if(typeof module==='object'&&module.exports)module.exports=factory(require('./experiment-core.js'),require('./core.js'));else root.CollageApp=factory(root.CollageLab,root.WardrobeCore);if(typeof document!=='undefined')root.CollageApp.create({document,host:root,wardrobe:root.WardrobeStorage,cloud:root.WardrobeCloud,imaging:root.WardrobeImages,renderer:root.CollageRenderer,store:root.CollageStore}).catch(e=>{const el=document.getElementById('error');el.hidden=false;el.textContent='实验页未完成打开：'+e.message;});})(typeof globalThis!=='undefined'?globalThis:this,function(C,W){
 'use strict';
 async function create({document:d,host=globalThis,wardrobe,cloud,imaging,renderer,store,rng=Math.random}){
  const $=id=>d.getElementById(id),canvas=$('canvas'),ctx=canvas.getContext('2d');
@@ -52,7 +52,7 @@ async function create({document:d,host=globalThis,wardrobe,cloud,imaging,rendere
  try{[garments,meta]=await Promise.all([wardrobe.read('garments'),wardrobe.read('meta')]);}catch(e){fail(new Error('本机衣橱未能读取，可返回衣橱同步。'+e.message));}
  let config;for(const [name,key]of [['localStorage','wardrobe-github-device'],['sessionStorage','wardrobe-github-session']]){try{const c=JSON.parse(host[name].getItem(key)||'null');if(c&&['owner','repo','token'].every(k=>typeof c[k]==='string'&&c[k].trim())){config=c;break;}}catch{}}
  if(config)try{client=cloud.createClient(config);await client.connect();if(!garments.length){const remote=await client.readRemote();garments=cloud.localRecords(remote.manifest,[],client.fullName);}}catch(e){fail(e);}
- garments=garments.filter(g=>g.purchaseStatus!=='wishlist');refreshList();status();
+ garments=garments.filter(g=>g.purchaseStatus!=='wishlist').map(g=>({...g,brand:W.formatBrand(g.brand)}));refreshList();status();
  try{saved=(await store.read()).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));renderSaved();}catch(e){fail(new Error('已保存实验暂未读取；仍可拼贴和导出图片。'+e.message));}
  const fromBoard=new URLSearchParams(host.location.search).get('from')==='board';const ids=fromBoard?(meta.find(r=>r.id==='draft')?.layers||[]).map(l=>l.garmentId):[];
  if(ids.length){const selectedGarments=garments.filter(g=>ids.includes(g.id));model.layers=C.layout(selectedGarments.map(g=>({...g,locked:true})),rng);dirty=!!model.layers.length;render();refreshList();await safe(loadLayers);status('已带入搭配画布中能读取到的单品，并锁定；点击随机可补充其他单品。尚未保存。');}

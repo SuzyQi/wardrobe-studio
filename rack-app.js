@@ -63,7 +63,7 @@ async function create({document:d,host=globalThis,wardrobe,cloud,imaging}){
  function remembered(){for(const [name,key]of [['localStorage','wardrobe-github-device'],['sessionStorage','wardrobe-github-session']])try{const c=JSON.parse(host[name].getItem(key)||'null');if(c&&['owner','repo','token'].every(k=>typeof c[k]==='string'&&c[k].trim()))return c;}catch{}return null;}
  async function refresh(){if(reading)return;reading=true;$('rack-refresh').disabled=true;$('rack-error').hidden=true;showStatus();let local=[];
  try{try{local=await wardrobe.read('garments');}catch(e){error(new Error('本机衣橱暂未读取。'+e.message));}const config=remembered();client?.disconnect();client=null;if(config){try{const c=cloud.createClient(config);await c.connect();client=c;if(!local.length){const remote=await c.readRemote();local=cloud.localRecords(remote.manifest,[],c.fullName);}}catch(e){error(e);}}
- epoch++;for(const url of urls.values())host.URL.revokeObjectURL(url);urls.clear();profiles.clear();inflight.clear();garments=local;example=false;filters();applyFilter();
+ epoch++;for(const url of urls.values())host.URL.revokeObjectURL(url);urls.clear();profiles.clear();inflight.clear();garments=local.map(g=>({...g,brand:C.formatBrand(g.brand)}));example=false;filters();applyFilter();
  }finally{reading=false;$('rack-refresh').disabled=false;showStatus();}}
  function examples(){if(garments.length)return;example=true;garments=(host.WardrobeDemo||[]).map((g,i)=>{const m=/viewBox="0 0 (\d+) (\d+)"/.exec(g.svg);const image=new host.Blob([g.svg],{type:'image/svg+xml'});return {...g,id:'rack-demo-'+i,aspect:m?Number(m[1])/Number(m[2]):.7,image,thumb:image};});filters();applyFilter();showStatus();}
  const point=e=>({x:e.clientX,y:e.clientY});

@@ -33,7 +33,8 @@
   function merge(base, local, remote, resolutions = {}) {
     const result = empty(), conflicts = [];
     for (const kind of ['garments', 'outfits']) {
-      const maps = [base || empty(), local, remote].map(m => new Map(m[kind].map(g => [g.id, g])));
+      // Casing-only changes must not conflict with genuine edits on another device.
+      const maps = [base || empty(), local, remote].map(m => new Map(m[kind].map(g => [g.id, kind === 'garments' ? { ...g, brand: C.formatBrand(g.brand) } : g])));
       const ids = new Set(maps.flatMap(m => [...m.keys()]));
       for (const id of [...ids].sort()) {
         const [b, l, r] = maps.map(m => m.get(id)); let winner;

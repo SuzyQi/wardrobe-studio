@@ -349,7 +349,7 @@
       $('category-tabs').append(b);
     }
   }
-  const addedBrandChoices = ['Gucci', 'Chanel', 'UNIQLO', 'Crocs'];
+  const addedBrandChoices = ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy'];
   function brandChoices() {
     const used = C.brandOptions([...state.garments, ...staged]).filter(b => b.value !== 'unbranded');
     return C.brandOptions([...used.map(b => ({ brand: b.label })), ...addedBrandChoices.map(brand => ({ brand }))])
@@ -362,7 +362,7 @@
     const empty = node('option', '', '选择品牌（可选）'); empty.value = ''; select.append(empty);
     for (const brand of choices) { const option = node('option', '', brand.label); option.value = brand.label; select.append(option); }
     const custom = node('option', '', '其他品牌，手动输入'); custom.value = '__custom__'; select.append(custom);
-    input.value = value || '';
+    input.value = C.formatBrand(value);
     const syncSelection = () => {
       const selected = choices.find(b => C.matchesBrand({ brand: input.value }, b.value));
       select.value = selected ? selected.label : input.value.trim() ? '__custom__' : '';

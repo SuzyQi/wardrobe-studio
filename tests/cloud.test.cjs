@@ -4,6 +4,20 @@ globalThis.crypto ||= require('node:crypto').webcrypto;
 const Cloud = require('../cloud.js');
 const { fixture } = require('./helpers/github-fixture.cjs');
 const C = require('../core.js');
+test('brand casing upgrades do not conflict with other-device edits or mask genuine brand changes', () => {
+  const g = { id: 'g_brand', name: 'Original', brand: 'paloma wool', assets: { image: { sha: 'unchanged' } }, updatedAt: 'unchanged' };
+  const base = { ...Cloud.empty(), garments: [g] };
+  const local = { ...base, garments: [{ ...g, name: 'My edit', brand: 'Paloma Wool' }] };
+  const remote = { ...base, garments: [{ ...g, brand: 'Paloma Wool' }] };
+  const merged = Cloud.merge(base, local, remote);
+  assert.equal(merged.conflicts.length, 0);
+  assert.equal(merged.manifest.garments[0].name, 'My edit');
+  assert.equal(merged.manifest.garments[0].brand, 'Paloma Wool');
+  assert.deepEqual(merged.manifest.garments[0].assets, g.assets);
+  assert.equal(merged.manifest.garments[0].updatedAt, 'unchanged');
+  assert.equal(g.brand, 'paloma wool', 'merge must not mutate old checkpoints');
+  assert.equal(Cloud.merge(base, {...base,garments:[{...g,brand:'Zara'}]}, {...base,garments:[{...g,brand:'Ganni'}]}).conflicts.length, 1);
+});
 const makeClient = api => Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only', fetch: api.fetch, minWriteGap: 0 });
 const garment = (id = 'g_1') => ({ id, name: 'The Simone', category: 'dresses', brand: 'Réalisation Par', purchasePrice: 100, originalPrice: 290, currency: 'GBP',
   aspect: .7, image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumbnail'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }),

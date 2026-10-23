@@ -19,7 +19,7 @@ test('brand choices include requested brands and existing names, and choosing or
   const records = [{ ...oldGarment('first'), brand: 'COS' }, { ...oldGarment('second'), brand: 'COS' }];
   const app = await start(records), el = app.elements; openRecord(app);
   const labels = el['edit-brand-choice'].children.map(o => o.value);
-  for (const brand of ['Gucci', 'Chanel', 'UNIQLO', 'Crocs', 'COS']) assert.ok(labels.includes(brand), brand);
+  for (const brand of ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'COS', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy']) assert.ok(labels.includes(brand), brand);
   assert.equal(labels[1], 'COS');
   el['edit-brand-choice'].value = 'Gucci'; el['edit-brand-choice'].fire('change');
   assert.equal(el['edit-brand'].value, 'Gucci');
@@ -53,6 +53,24 @@ test('upload cards save a selected brand and a manually entered new brand indepe
   assert.deepEqual(app.errors, []);
 });
 const oldGarment = id => ({ id, name: id, category: 'dresses', color: '', notes: '', aspect: .7, image: PNG, thumb: PNG, original: PNG, createdAt: '2024-01-01', updatedAt: '2024-01-01' });
+test('existing brands display normalized before editing and manual lowercase input saves normalized without changing assets or prices', async () => {
+  const g = { ...oldGarment('existing'), brand: 'maison margiela', purchasePrice: 123, originalPrice: 200, notes: 'Keep me' };
+  const app = await start([g]), el = app.elements;
+  assert.ok(textOf(el['garment-grid']).includes('Maison Margiela'));
+  assert.ok(el['brand-filter'].children.some(o => o.textContent === 'Maison Margiela（1）'));
+  openRecord(app);
+  assert.equal(el['edit-brand-choice'].value, 'Maison Margiela');
+  el['edit-brand-choice'].value = '__custom__'; el['edit-brand-choice'].fire('change');
+  el['edit-brand'].value = '  rarely   alike '; el['edit-brand'].fire('input');
+  el['edit-form'].fire('submit'); await flush();
+  const saved = app.memory.garments[0];
+  assert.equal(saved.brand, 'Rarely Alike');
+  for (const key of ['id','image','thumb','original','purchasePrice','originalPrice','notes','createdAt']) assert.deepEqual(saved[key],g[key],key);
+  assert.equal(el['edit-brand-choice'].children.filter(o=>o.value==='Rarely Alike').length, 1);
+  const reloaded=await start(app.memory.garments); openRecord(reloaded);
+  assert.equal(reloaded.elements['edit-brand-choice'].value,'Rarely Alike');
+  assert.deepEqual(app.errors, []);
+});
 class Element {
   constructor(tag = 'div') { this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {}; this.events = {}; this.attributes = {}; this.style = { setProperty() {} }; this.classList = { toggle() {}, add() {}, remove() {} }; this.value = ''; this.isConnected = false; }
   set value(value) { this._value = String(value); } get value() { return this._value; }
