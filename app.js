@@ -349,7 +349,7 @@
       $('category-tabs').append(b);
     }
   }
-  const addedBrandChoices = ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy'];
+  const addedBrandChoices = ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy', 'Jaded London'];
   function brandChoices() {
     const used = C.brandOptions([...state.garments, ...staged]).filter(b => b.value !== 'unbranded');
     return C.brandOptions([...used.map(b => ({ brand: b.label })), ...addedBrandChoices.map(brand => ({ brand }))])

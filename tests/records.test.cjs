@@ -19,7 +19,7 @@ test('brand choices include requested brands and existing names, and choosing or
   const records = [{ ...oldGarment('first'), brand: 'COS' }, { ...oldGarment('second'), brand: 'COS' }];
   const app = await start(records), el = app.elements; openRecord(app);
   const labels = el['edit-brand-choice'].children.map(o => o.value);
-  for (const brand of ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'COS', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy']) assert.ok(labels.includes(brand), brand);
+  for (const brand of ['Gucci', 'Chanel', 'Uniqlo', 'Crocs', 'COS', 'Paloma Wool', 'Rarely Alike', 'Moon Boot', 'Zara', 'Lululemon', 'Rab', 'Skims', 'Vintage', 'Tory Burch', 'Max Mara', 'Ganni', 'Balmain', 'LK Bennett', 'Moncler', 'Burberry', 'Renlisu', 'Shiatzy Chen', 'Dolce & Gabbana', 'New Balance', 'Abra', 'Needle And Thread', 'Givenchy', 'Jaded London']) assert.ok(labels.includes(brand), brand);
   assert.equal(labels[1], 'COS');
   el['edit-brand-choice'].value = 'Gucci'; el['edit-brand-choice'].fire('change');
   assert.equal(el['edit-brand'].value, 'Gucci');
