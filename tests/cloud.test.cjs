@@ -22,17 +22,16 @@ const makeClient = api => Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-
 const garment = (id = 'g_1') => ({ id, name: 'The Simone', category: 'dresses', brand: 'Réalisation Par', purchasePrice: 100, originalPrice: 290, currency: 'GBP',
   aspect: .7, image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumbnail'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }),
   createdAt: '2024-06-26', updatedAt: '2024-06-26' });
-test('metadata-only sync sends one manifest entry, preserves all photos, and cached head checks avoid repeated downloads', async () => {
+test('metadata-only sync uses one atomic request, preserves all photos, and checks the cached head', async () => {
   const api=fixture(), garments=Array.from({length:30},(_,i)=>garment('g_'+i));
   const {client,result}=await publish(api,garments);const previousAssets=result.manifest.garments.map(g=>g.assets);
   const before=api.requests.length,remote=await client.readRemote();
   assert.equal(api.requests.length-before,1,'the unchanged head only needs a branch lookup');
   const local=structuredClone(result.manifest);local.garments[0].brand='Jaded London';
-  const steps=[];await client.publish(local,remote,message=>steps.push(message));
-  const tree=api.requests.filter(r=>r.method==='POST'&&r.url.endsWith('/git/trees')).at(-1).body.tree;
-  assert.equal(tree.length,1);assert.equal(tree[0].path,'wardrobe.json');
+  const steps=[],start=api.requests.length;await client.publish(local,remote,message=>steps.push(message));
+  const writes=api.requests.slice(start);assert.equal(writes.length,1);assert.equal(writes[0].method,'PUT');assert.ok(writes[0].url.endsWith('/contents/wardrobe.json'));assert.equal(writes[0].body.sha,result.fileSHA);
   assert.deepEqual(api.manifest().garments.map(g=>g.assets),previousAssets);
-  assert.equal(api.manifest().garments[0].brand,'Jaded London');assert.equal(steps.length,3);
+  assert.equal(api.manifest().garments[0].brand,'Jaded London');assert.equal(steps.length,1);
   const cached=await client.readRemote();cached.manifest.garments[0].brand='Caller mutation';
   assert.equal((await client.readRemote()).manifest.garments[0].brand,'Jaded London');
 });
@@ -54,7 +53,7 @@ test('stopping a pending cloud save leaves the last revision intact and the same
   const api=fixture(),{result}=await publish(api);let paused=false,entered;
   const started=new Promise(resolve=>entered=resolve);
   const client=Cloud.createClient({owner:'SuzyQi',repo:'wardrobe-studio-data',token:'unit-test-only',minWriteGap:0,fetch:async(url,options)=>{
-    if(paused&&url.endsWith('/git/trees')&&options.method==='POST') {entered();return await new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true});});}
+    if(paused&&url.endsWith('/contents/wardrobe.json')&&options.method==='PUT') {entered();return await new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true});});}
     return api.fetch(url,options);
   }});
   await client.connect();const remote=await client.readRemote(),local=structuredClone(result.manifest);local.garments[0].brand='Chanel';
@@ -74,6 +73,48 @@ async function publish(api, garments = [garment()], outfits = []) {
   const merged = Cloud.merge(null, local, remote.manifest); assert.equal(merged.conflicts.length, 0);
   const result = await client.publish(merged.manifest, remote); return { client, local, result };
 }
+test('reopening an unchanged saved cloud revision needs only privacy and branch checks', async () => {
+  const api = fixture(), { result } = await publish(api);
+  const checkpoint = { origin: 'suzyqi/wardrobe-studio-data', ...result };
+  const client = Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only', fetch: api.fetch, minWriteGap: 0, cachedRemote: checkpoint });
+  const before = api.requests.length;
+  await client.connect(); const remote = await client.readRemote();
+  assert.equal(api.requests.length - before, 2);
+  assert.deepEqual(remote.manifest, result.manifest); assert.equal(remote.fileSHA, result.fileSHA); assert.equal(remote.tree, result.tree);
+  checkpoint.manifest.garments[0].brand = 'Caller mutation';
+  assert.notEqual((await client.readRemote()).manifest.garments[0].brand, 'Caller mutation');
+});
+test('saved revisions are ignored after a remote edit, for other repositories, or when malformed', async () => {
+  const api = fixture(), { client: writer, result } = await publish(api);
+  const seed = { origin: 'suzyqi/wardrobe-studio-data', ...result };
+  const change = structuredClone(result.manifest); change.garments[0].brand = 'Gucci';
+  await writer.publish(change, await writer.readRemote());
+  for (const cachedRemote of [seed, { ...seed, origin: 'other/repository' }, { ...seed, manifest: {} }]) {
+    const reader = Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only', fetch: api.fetch, minWriteGap: 0, cachedRemote });
+    const before = api.requests.length; await reader.connect(); const remote = await reader.readRemote();
+    assert.equal(remote.manifest.garments[0].brand, 'Gucci'); assert.equal(api.requests.length - before, 5);
+  }
+});
+test('older checkpoints resolve their tree once and retain a working multi-file fallback', async () => {
+  const api = fixture(), { result } = await publish(api);
+  const client = Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-studio-data', token: 'unit-test-only', fetch: api.fetch, minWriteGap: 0,
+    cachedRemote: { origin: 'suzyqi/wardrobe-studio-data', head: result.head, manifest: result.manifest } });
+  const before = api.requests.length; await client.connect(); const remote = await client.readRemote();
+  assert.equal(api.requests.length - before, 3); assert.equal(remote.tree, result.tree);
+  const changed = structuredClone(remote.manifest); changed.garments[0].brand = 'Chanel';
+  const saved = await client.publish(changed, remote);
+  assert.equal(api.manifest().garments[0].brand, 'Chanel');
+  assert.equal((await makeClient(api).readRemote()).fileSHA, saved.fileSHA);
+});
+test('one-request metadata saves reject concurrent wardrobe edits and preserve the newer version', async () => {
+  const api = fixture(), { client, result } = await publish(api), other = makeClient(api);
+  await other.connect(); const remote = await client.readRemote(), otherRemote = await other.readRemote();
+  const mine = structuredClone(result.manifest), theirs = structuredClone(result.manifest);
+  mine.garments[0].brand = 'Chanel'; theirs.garments[0].brand = 'Gucci';
+  await other.publish(theirs, otherRemote); const head = api.head;
+  await assert.rejects(client.publish(mine, remote), /云端版本/);
+  assert.equal(api.head, head); assert.equal(api.manifest().garments[0].brand, 'Gucci');
+});
 test('cache recovery removes only byte-verified cloud copies and preserves unsynced or unreadable images', async () => {
   const api = fixture(), g = garment(); const { result, local } = await publish(api, [g]);
   const cached = Cloud.localRecords(result.manifest, [g], 'suzyqi/wardrobe-studio-data', local)[0];
@@ -123,9 +164,9 @@ test('public repositories and invalid destinations are rejected before any uploa
   assert.equal(api.requests.filter(r => r.method !== 'GET').length, 0);
   assert.throws(() => Cloud.createClient({ owner: 'SuzyQi', repo: '../public', token: 'unit-test-only' }), /仓库名/);
 });
-test('concurrent branch moves never force an overwrite or report a completed sync', async () => {
+test('image-changing multi-file sync rejects concurrent branch moves without forcing an overwrite', async () => {
   const api = fixture(); const { client } = await publish(api), before = api.head;
-  const remote = await client.readRemote(); const local = await client.prepare([{ ...garment(), name: 'Changed' }], []);
+  const remote = await client.readRemote(); const local = await client.prepare([{ ...garment(), name: 'Changed', image: new Blob(['new photo'], { type: 'image/png' }) }], []);
   api.moveBeforePublish(); await assert.rejects(client.publish(local, remote), /云端版本/);
   assert.notEqual(api.head, before); assert.equal(api.manifest().garments[0].name, 'The Simone');
 });

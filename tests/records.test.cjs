@@ -316,7 +316,9 @@ test('sync skips unchanged photo records and a brand-only save needs no second i
 });
 test('a clean reopened wardrobe reuses its photos and exposes stage timings without private details', async () => {
   const api=fixture(),first=await start([{...oldGarment('secret-name'),image:new Blob(['image'],{type:'image/png'}),thumb:new Blob(['thumb'],{type:'image/webp'}),original:new Blob(['original'],{type:'image/jpeg'})}],{api});
-  await connect(first);const app=await start(first.memory.garments,{api,meta:first.memory.meta});await connect(app);
+  await connect(first);const app=await start(first.memory.garments,{api,meta:first.memory.meta}),before=api.requests.length;await connect(app);
+  assert.equal(api.requests.length-before,2,'reopened sessions reuse the exact saved revision after two server checks');
+  const checkpoint=app.memory.meta.find(m=>m.id==='github-sync');assert.match(checkpoint.tree,/^[a-f0-9]{40}$/);assert.match(checkpoint.fileSHA,/^[a-f0-9]{40}$/);
   const report=textOf(app.elements['cloud-sync-timings']);
   assert.match(report,/最近一次总耗时/);assert.match(report,/图片校验读取 0.0 MB/);assert.match(report,/复用 3 张/);assert.match(report,/新上传 0 张/);
   assert.match(report,/读取云端资料/);assert.match(report,/写入本机记录/);assert.doesNotMatch(report,/unit-test-only|secret-name|Authorization/);
@@ -337,11 +339,11 @@ test('the sync wait screen can be stopped without losing a locally saved brand, 
   await connect(app);const el=app.elements;
   el['bulk-brand-start'].fire('click');bulkPick(app,'g_wait');bulkChoose(app,'Gucci');el['bulk-brand-apply'].fire('click');await flush();
   const oldHead=api.head,originalFetch=api.fetch;let waiting=false,entered=false;
-  api.fetch=async(url,options)=>{if(waiting&&url.endsWith('/git/trees')&&options.method==='POST'){entered=true;return await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));}return originalFetch(url,options);};
+  api.fetch=async(url,options)=>{if(waiting&&url.endsWith('/contents/wardrobe.json')&&options.method==='PUT'){entered=true;return await new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true}));}return originalFetch(url,options);};
   // The app client uses api.fetch through its supplied closure; reconnect picks up the delayed fetch.
   waiting=true;const retry=await start(app.memory.garments,{api,meta:app.memory.meta});const r=retry.elements;
   r['cloud-owner'].value='SuzyQi';r['cloud-repo'].value='wardrobe-studio-data';r['cloud-token'].value='unit-test-only';r['cloud-form'].fire('submit');
-  await until(()=>entered);assert.equal(r['busy-overlay'].open,true);assert.equal(r['cloud-sync-cancel'].hidden,false);assert.match(r['busy-message'].textContent,/1 \/ 3/);
+  await until(()=>entered);assert.equal(r['busy-overlay'].open,true);assert.equal(r['cloud-sync-cancel'].hidden,false);assert.match(r['busy-message'].textContent,/保存云端资料/);
   r['cloud-sync-cancel'].fire('click');await until(()=>!r['busy-overlay'].open);
   assert.equal(retry.memory.garments[0].brand,'Gucci');assert.equal(retry.memory.meta.find(m=>m.id==='github-sync').dirty,true);assert.equal(api.head,oldHead);assert.equal(r['cloud-sync-cancel'].hidden,true);
   waiting=false;r['cloud-token'].value='unit-test-only';r['cloud-form'].fire('submit');await until(()=>r['cloud-button-label'].textContent==='已同步');

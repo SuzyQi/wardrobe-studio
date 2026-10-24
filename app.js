@@ -193,7 +193,7 @@
     }
     const nextOutfits = published.manifest.outfits, ids = new Set(nextGarments.map(g => g.id)), outfitIds = new Set(nextOutfits.map(o => o.id));
     const layers = state.layers.filter(l => ids.has(l.garmentId));
-    const checkpoint = { id: 'github-sync', config: { ...cloud.saved.config }, base: published.manifest, head: published.head,
+    const checkpoint = { id: 'github-sync', config: { ...cloud.saved.config }, base: published.manifest, head: published.head, tree: published.tree, fileSHA: published.fileSHA,
       lastSyncAt: new Date().toISOString(), dirty: false, auto: cloud.auto };
     const sameCachedRecord = (a, b) => {
       if (!a || Object.keys(a).length !== Object.keys(b).length) return false;
@@ -274,7 +274,7 @@
         if (merged.conflicts.length) { conflicts = merged.conflicts; cloud.conflict = conflicts; cloud.message = '发现不同设备的修改，请选择保留版本'; return; }
         $('busy-message').textContent = '正在保存云端版本…';
         phase('检查云端变更');
-        const published = await client.publish(merged.manifest, remote, message => { $('busy-message').textContent = message; const labels = ['云端：建立目录', '云端：建立版本', '云端：确认保存']; const step = /（([123]) \/ 3）/.exec(message); if (step) phase(labels[Number(step[1]) - 1]); });
+        const published = await client.publish(merged.manifest, remote, message => { $('busy-message').textContent = message; const labels = ['云端：建立目录', '云端：建立版本', '云端：确认保存']; const step = /（([123]) \/ 3）/.exec(message); if (step) phase(labels[Number(step[1]) - 1]); else if (message === '正在保存云端资料…') phase('云端：保存资料'); });
         checkCancellation();
         $('cloud-sync-cancel').disabled = true; $('busy-message').textContent = '正在更新本机记录…';
         phase('写入本机记录');
@@ -291,7 +291,7 @@
     const config = remembered?.config || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
     $('cloud-token').value = '';
     const mode = remembered?.mode || ($('cloud-remember').checked ? 'device' : 'memory'), previousClient = cloud.client, previousSaved = cloud.saved;
-    const candidate = Cloud.createClient({ ...config, canRecoverAsset: canRecoverImage, canReuseAsset: canRecoverImage, onRecoveredAsset: replaceRecoveredImage });
+    const candidate = Cloud.createClient({ ...config, cachedRemote: { origin: (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase(), head: cloud.saved.head, tree: cloud.saved.tree, fileSHA: cloud.saved.fileSHA, manifest: cloud.saved.base }, canRecoverAsset: canRecoverImage, canReuseAsset: canRecoverImage, onRecoveredAsset: replaceRecoveredImage });
     try {
       const same = (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase() === candidate.fullName;
       cloud.client = candidate; cloud.saved = { ...cloud.saved, config: { owner: config.owner, repo: config.repo }, base: same ? cloud.saved.base : null };

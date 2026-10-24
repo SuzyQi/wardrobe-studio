@@ -64,9 +64,9 @@
   function from64(text) {
     const binary = atob(text.replace(/\s/g, '')); return Uint8Array.from(binary, char => char.charCodeAt(0));
   }
-  async function digest(bytes) {
+  async function digest(bytes, algorithm = 'SHA-256') {
     if (!globalThis.crypto?.subtle) throw new Error('请在新版浏览器的 HTTPS 网页中连接 GitHub。');
-    return [...new Uint8Array(await globalThis.crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
+    return [...new Uint8Array(await globalThis.crypto.subtle.digest(algorithm, bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
   }
   function createClient(options) {
     const { owner, repo } = options;
@@ -76,6 +76,11 @@
     const fetcher = options.fetch || globalThis.fetch;
     const fullName = owner + '/' + repo, prefix = '/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo);
     const controllers = new Set(), prepared = new WeakMap(); let branch = 'main', nextWriteAt = 0, cancelEpoch = 0, remoteCache = null;
+    const cached = options.cachedRemote;
+    if (cached?.origin === fullName.toLowerCase() && SHA.test(cached.head)) {
+      try { remoteCache = { head: cached.head, tree: SHA.test(cached.tree) ? cached.tree : null, fileSHA: SHA.test(cached.fileSHA) ? cached.fileSHA : null, exists: true, manifest: validateManifest(cached.manifest) }; }
+      catch { /* Invalid local checkpoints fall back to a full remote read. */ }
+    }
     function cancelled() { const error = new Error('已停止本次同步，本机记录已保留；可稍后重试。'); error.name = 'SyncCancelled'; return error; }
     const minWriteGap = options.minWriteGap ?? 900;
     function failure(status) {
@@ -119,7 +124,16 @@
       const ref = await request('/git/ref/heads/' + branch.split('/').map(encodeURIComponent).join('/'));
       if (!SHA.test(ref.object?.sha)) throw new Error('云端分支记录无效。');
       // Still check the branch every time; reuse only a version with the exact same head.
-      if (remoteCache?.head === ref.object.sha) return { ...remoteCache, manifest: validateManifest(remoteCache.manifest) };
+      if (remoteCache?.head === ref.object.sha) {
+        // Older checkpoints have no tree. Resolve it once without downloading
+        // the already saved manifest; never use a checkpoint for another head.
+        if (!remoteCache.tree) {
+          const commit = await request('/git/commits/' + ref.object.sha);
+          if (!SHA.test(commit.tree?.sha)) throw new Error('云端文件目录无效。');
+          remoteCache.tree = commit.tree.sha;
+        }
+        return { ...remoteCache, manifest: validateManifest(remoteCache.manifest) };
+      }
       const commit = await request('/git/commits/' + ref.object.sha);
       if (!SHA.test(commit.tree?.sha)) throw new Error('云端文件目录无效。');
       const tree = await request('/git/trees/' + commit.tree.sha);
@@ -132,7 +146,7 @@
         let value; try { value = JSON.parse(new TextDecoder().decode(from64(file.content))); } catch { throw new Error('云端衣橱文件损坏，尚未更改本机衣橱。'); }
         manifest = validateManifest(value);
       }
-      remoteCache = { head: ref.object.sha, tree: commit.tree.sha, exists: !!entry, manifest };
+      remoteCache = { head: ref.object.sha, tree: commit.tree.sha, fileSHA: entry?.sha || null, exists: !!entry, manifest };
       return { ...remoteCache, manifest: validateManifest(manifest) };
     }
     async function asset(g, field, stats) {
@@ -180,8 +194,9 @@
       return validateManifest(result);
     }
     async function publish(manifest, remote, progress = () => {}) {
+      const epoch = cancelEpoch;
       const safe = validateManifest(manifest);
-      if (remote.exists && sameRecords(safe, remote.manifest)) return { manifest: remote.manifest, head: remote.head };
+      if (remote.exists && sameRecords(safe, remote.manifest)) return { manifest: remote.manifest, head: remote.head, tree: remote.tree, fileSHA: remote.fileSHA };
       safe.updatedAt = new Date().toISOString();
       const assets = new Map();
       for (const g of safe.garments) for (const a of Object.values(g.assets)) assets.set(a.path, a.sha);
@@ -189,11 +204,28 @@
       for (const g of remote.manifest.garments) for (const a of Object.values(g.assets)) previousAssets.set(a.path, a.sha);
       const removed = new Set();
       for (const g of remote.manifest.garments) for (const a of Object.values(g.assets)) if (!assets.has(a.path)) removed.add(a.path);
+      const changedAssets = [...assets].filter(([path, sha]) => previousAssets.get(path) !== sha);
+      const content = JSON.stringify(safe), bytes = new TextEncoder().encode(content);
+      if (remote.exists && SHA.test(remote.fileSHA) && !changedAssets.length && !removed.size) {
+        progress('正在保存云端资料…');
+        // The file SHA is the compare-and-swap guard. A concurrent wardrobe
+        // edit rejects instead of overwriting the other device's records.
+        const saved = await request('/contents/' + FILE, { method: 'PUT', body: { message: 'Sync wardrobe details', content: bytes64(bytes), sha: remote.fileSHA, branch } });
+        if (!SHA.test(saved.content?.sha) || !SHA.test(saved.commit?.sha) || !SHA.test(saved.commit?.tree?.sha)) throw new Error('GitHub 未返回有效的保存版本。');
+        remoteCache = { manifest: safe, head: saved.commit.sha, tree: saved.commit.tree.sha, fileSHA: saved.content.sha, exists: true };
+        return { manifest: safe, head: remoteCache.head, tree: remoteCache.tree, fileSHA: remoteCache.fileSHA };
+      }
+      // Keep the blob identity for the next metadata-only update, including
+      // after reopening. Compute it locally rather than adding a network read.
+      const header = new TextEncoder().encode('blob ' + bytes.length + '\0'), gitBytes = new Uint8Array(header.length + bytes.length);
+      gitBytes.set(header); gitBytes.set(bytes, header.length);
+      const fileSHA = await digest(gitBytes, 'SHA-1');
+      if (epoch !== cancelEpoch) throw cancelled();
       progress('正在保存云端版本（1 / 3）…');
       const tree = await request('/git/trees', { method: 'POST', body: { base_tree: remote.tree, tree: [
-        ...[...assets].filter(([path, sha]) => previousAssets.get(path) !== sha).map(([path, sha]) => ({ path, sha, mode: '100644', type: 'blob' })),
+        ...changedAssets.map(([path, sha]) => ({ path, sha, mode: '100644', type: 'blob' })),
         ...[...removed].map(path => ({ path, sha: null, mode: '100644', type: 'blob' })),
-        { path: FILE, content: JSON.stringify(safe), mode: '100644', type: 'blob' }
+        { path: FILE, content, mode: '100644', type: 'blob' }
       ] } });
       if (!SHA.test(tree.sha)) throw new Error('GitHub 未返回有效的目录编号。');
       progress('正在保存云端版本（2 / 3）…');
@@ -201,8 +233,8 @@
       if (!SHA.test(commit.sha)) throw new Error('GitHub 未返回有效的提交编号。');
       progress('正在保存云端版本（3 / 3）…');
       await request('/git/refs/heads/' + branch.split('/').map(encodeURIComponent).join('/'), { method: 'PATCH', body: { sha: commit.sha, force: false } });
-      remoteCache = { manifest: safe, head: commit.sha, tree: tree.sha, exists: true };
-      return { manifest: safe, head: commit.sha };
+      remoteCache = { manifest: safe, head: commit.sha, tree: tree.sha, fileSHA, exists: true };
+      return { manifest: safe, head: commit.sha, tree: tree.sha, fileSHA };
     }
     async function getAsset(reference, id) {
       const a = validateAsset(reference, id), file = await request('/git/blobs/' + a.sha);

@@ -26,6 +26,15 @@ function fixture({ privateRepo = true } = {}) {
       return response(200, { sha: id, size: bytes.length, content: bytes.toString('base64'), encoding: 'base64' });
     }
     if (path === '/git/blobs' && method === 'POST') return response(201, { sha: putBlob(Buffer.from(body.content, body.encoding === 'base64' ? 'base64' : 'utf8')) });
+    if (path === '/contents/wardrobe.json' && method === 'PUT') {
+      const current = commits.get(head), tree = new Map(trees.get(current.tree.sha));
+      if (body.branch !== 'main' || tree.get('wardrobe.json') !== body.sha) return response(409, {});
+      const fileSHA = putBlob(Buffer.from(body.content, 'base64')); tree.set('wardrobe.json', fileSHA);
+      const treeSHA = sha(JSON.stringify([...tree])); trees.set(treeSHA, tree);
+      const id = sha(JSON.stringify({ tree: treeSHA, parent: head })), commit = { sha: id, tree: { sha: treeSHA }, parents: [head] };
+      commits.set(id, commit); head = id; commitCount++;
+      return response(200, { content: { sha: fileSHA }, commit });
+    }
     if (path === '/git/trees' && method === 'POST') {
       const tree = new Map(trees.get(body.base_tree));
       for (const entry of body.tree) { if (entry.sha === null) tree.delete(entry.path); else tree.set(entry.path, entry.sha || putBlob(entry.content)); }
