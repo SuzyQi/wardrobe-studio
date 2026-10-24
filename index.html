@@ -21,10 +21,10 @@
   <script src="./color-core.js?v=20261022-color" defer></script>
   <script src="./images.js?v=20261022-color" defer></script>
   <script src="./demo.js?v=20261020-image-bytes" defer></script>
-  <script src="./cloud.js?v=20261023-brands" defer></script>
+  <script src="./cloud.js?v=20261024-sync-speed" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
   <script src="./archive-book.js?v=20261020-magazine" defer></script>
-  <script src="./app.js?v=20261024-bulk-brands" defer></script>
+  <script src="./app.js?v=20261024-sync-speed" defer></script>
 <link rel="stylesheet" href="./ui-theme.css?v=20261024-bulk-brands">
 </head>
 <body>
@@ -200,7 +200,7 @@
 <dialog id="cloud-conflict-dialog" class="modal cloud-modal" aria-labelledby="cloud-conflict-title"><div class="modal-heading"><h2 id="cloud-conflict-title">选择要保留的版本</h2></div><p class="muted">同一条记录在不同设备上都有修改。选择后再提交；暂停时，双方记录会保持当前状态。</p><div id="cloud-conflict-list" class="cloud-conflict-list"></div><div class="modal-footer"><button id="cloud-conflict-cancel" class="button secondary">暂停同步</button><button id="cloud-resolve" class="button primary">应用选择并同步</button></div></dialog>
 <dialog id="confirm-dialog" class="modal confirm-modal"><h2 id="confirm-title"></h2><p id="confirm-message" class="muted"></p><div class="modal-footer"><button id="confirm-no" class="button secondary">取消</button><button id="confirm-yes" class="button primary">确定</button></div></dialog>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
-<dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p><button id="color-scan-cancel" class="text-button" type="button" hidden>停止补全</button></dialog>
+<dialog id="busy-overlay" class="busy-overlay" hidden aria-label="正在处理，请稍等"><span class="spinner"></span><p id="busy-message">正在整理…</p><button id="color-scan-cancel" class="text-button" type="button" hidden>停止补全</button><button id="cloud-sync-cancel" class="button secondary" type="button" hidden>稍后同步</button></dialog>
 <noscript><p class="noscript">请在浏览器中启用 JavaScript，才能上传、保存和搭配衣服。</p></noscript>
 </body>
 </html>

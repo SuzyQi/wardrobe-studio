@@ -75,7 +75,8 @@
     if (!token) throw new Error('请填写仅限私有数据仓库的访问授权。');
     const fetcher = options.fetch || globalThis.fetch;
     const fullName = owner + '/' + repo, prefix = '/repos/' + encodeURIComponent(owner) + '/' + encodeURIComponent(repo);
-    const controllers = new Set(), prepared = new WeakMap(); let branch = 'main', nextWriteAt = 0;
+    const controllers = new Set(), prepared = new WeakMap(); let branch = 'main', nextWriteAt = 0, cancelEpoch = 0, remoteCache = null;
+    function cancelled() { const error = new Error('已停止本次同步，本机记录已保留；可稍后重试。'); error.name = 'SyncCancelled'; return error; }
     const minWriteGap = options.minWriteGap ?? 900;
     function failure(status) {
       const messages = { 401: 'GitHub 授权已失效，请重新连接。', 403: 'GitHub 拒绝访问。请检查此仓库的 Contents 读写权限，或稍后重试。',
@@ -84,11 +85,13 @@
     }
     async function request(path, { method = 'GET', body, raw = false } = {}) {
       if (!token) throw new Error('请先连接 GitHub。');
+      const epoch = cancelEpoch;
       if (method !== 'GET') {
         const delay = Math.max(0, nextWriteAt - Date.now()); nextWriteAt = Math.max(Date.now(), nextWriteAt) + minWriteGap;
         if (delay) await new Promise(resolve => setTimeout(resolve, delay));
         if (!token) throw new Error('请先连接 GitHub。');
       }
+      if (epoch !== cancelEpoch) throw cancelled();
       const controller = new AbortController(); controllers.add(controller);
       const timer = setTimeout(() => controller.abort(), 30000);
       try {
@@ -96,8 +99,11 @@
           headers: { Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json', Authorization: 'Bearer ' + token, 'X-GitHub-Api-Version': '2026-03-10', ...(body ? { 'Content-Type': 'application/json' } : {}) },
           ...(body ? { body: JSON.stringify(body) } : {}) });
         if (!response.ok) throw failure(response.status);
-        return raw ? new Uint8Array(await response.arrayBuffer()) : await response.json();
+        const result = raw ? new Uint8Array(await response.arrayBuffer()) : await response.json();
+        if (epoch !== cancelEpoch) throw cancelled();
+        return result;
       } catch (error) {
+        if (epoch !== cancelEpoch || error.name === 'SyncCancelled') throw cancelled();
         if (error.status) throw error;
         throw new Error('网络连接中断或请求超时，本机记录已保留，请重新同步。');
       } finally { clearTimeout(timer); controllers.delete(controller); }
@@ -112,6 +118,8 @@
     async function readRemote() {
       const ref = await request('/git/ref/heads/' + branch.split('/').map(encodeURIComponent).join('/'));
       if (!SHA.test(ref.object?.sha)) throw new Error('云端分支记录无效。');
+      // Still check the branch every time; reuse only a version with the exact same head.
+      if (remoteCache?.head === ref.object.sha) return { ...remoteCache, manifest: validateManifest(remoteCache.manifest) };
       const commit = await request('/git/commits/' + ref.object.sha);
       if (!SHA.test(commit.tree?.sha)) throw new Error('云端文件目录无效。');
       const tree = await request('/git/trees/' + commit.tree.sha);
@@ -124,9 +132,11 @@
         let value; try { value = JSON.parse(new TextDecoder().decode(from64(file.content))); } catch { throw new Error('云端衣橱文件损坏，尚未更改本机衣橱。'); }
         manifest = validateManifest(value);
       }
-      return { head: ref.object.sha, tree: commit.tree.sha, exists: !!entry, manifest };
+      remoteCache = { head: ref.object.sha, tree: commit.tree.sha, exists: !!entry, manifest };
+      return { ...remoteCache, manifest: validateManifest(manifest) };
     }
     async function asset(g, field) {
+      const epoch = cancelEpoch;
       const old = g.cloudOrigin === fullName.toLowerCase() ? g.cloudAssets?.[field] : null;
       const blob = g[field];
       if (!blob) {
@@ -145,6 +155,7 @@
         g[field] = recovered; options.onRecoveredAsset?.(g, field, blob, recovered);
       }
       const hash = await digest(bytes);
+      if (epoch !== cancelEpoch) throw cancelled();
       if (old && old.hash === hash && old.type === blob.type) return remember(validateAsset(old, g.id));
       const created = await request('/git/blobs', { method: 'POST', body: { content: bytes64(bytes), encoding: 'base64' } });
       if (!SHA.test(created.sha)) throw new Error('GitHub 未返回有效的图片编号。');
@@ -152,32 +163,38 @@
       return remember(result);
     }
     async function prepare(garments, outfits, progress = () => {}) {
-      const result = empty();
+      const result = empty(), epoch = cancelEpoch;
       for (let i = 0; i < garments.length; i++) {
         const g = garments[i]; progress('正在准备照片 ' + (i + 1) + ' / ' + garments.length + '…');
-        const assets = {}; for (const field of C.imageFields(g)) assets[field] = await asset(g, field);
+        const assets = {}; for (const field of C.imageFields(g)) { assets[field] = await asset(g, field); if (epoch !== cancelEpoch) throw cancelled(); }
         result.garments.push({ ...metadata(g), assets });
       }
       result.outfits = outfits.map(o => ({ ...o, layers: o.layers.map(l => ({ ...l })) }));
       return validateManifest(result);
     }
-    async function publish(manifest, remote) {
+    async function publish(manifest, remote, progress = () => {}) {
       const safe = validateManifest(manifest);
       if (remote.exists && sameRecords(safe, remote.manifest)) return { manifest: remote.manifest, head: remote.head };
       safe.updatedAt = new Date().toISOString();
       const assets = new Map();
       for (const g of safe.garments) for (const a of Object.values(g.assets)) assets.set(a.path, a.sha);
+      const previousAssets = new Map();
+      for (const g of remote.manifest.garments) for (const a of Object.values(g.assets)) previousAssets.set(a.path, a.sha);
       const removed = new Set();
       for (const g of remote.manifest.garments) for (const a of Object.values(g.assets)) if (!assets.has(a.path)) removed.add(a.path);
+      progress('正在保存云端版本（1 / 3）…');
       const tree = await request('/git/trees', { method: 'POST', body: { base_tree: remote.tree, tree: [
-        ...[...assets].map(([path, sha]) => ({ path, sha, mode: '100644', type: 'blob' })),
+        ...[...assets].filter(([path, sha]) => previousAssets.get(path) !== sha).map(([path, sha]) => ({ path, sha, mode: '100644', type: 'blob' })),
         ...[...removed].map(path => ({ path, sha: null, mode: '100644', type: 'blob' })),
         { path: FILE, content: JSON.stringify(safe), mode: '100644', type: 'blob' }
       ] } });
       if (!SHA.test(tree.sha)) throw new Error('GitHub 未返回有效的目录编号。');
+      progress('正在保存云端版本（2 / 3）…');
       const commit = await request('/git/commits', { method: 'POST', body: { message: 'Sync wardrobe records and photos', tree: tree.sha, parents: [remote.head] } });
       if (!SHA.test(commit.sha)) throw new Error('GitHub 未返回有效的提交编号。');
+      progress('正在保存云端版本（3 / 3）…');
       await request('/git/refs/heads/' + branch.split('/').map(encodeURIComponent).join('/'), { method: 'PATCH', body: { sha: commit.sha, force: false } });
+      remoteCache = { manifest: safe, head: commit.sha, tree: tree.sha, exists: true };
       return { manifest: safe, head: commit.sha };
     }
     async function getAsset(reference, id) {
@@ -191,8 +208,9 @@
       if (bytes.length !== a.size || await digest(bytes) !== a.hash) throw new Error('云端图片校验失败，请重新同步；本机记录已保留。');
       return new Blob([bytes], { type: a.type });
     }
-    function disconnect() { token = ''; for (const controller of controllers) controller.abort(); controllers.clear(); }
-    return { fullName: fullName.toLowerCase(), connect, readRemote, prepare, publish, getAsset, disconnect };
+    function cancelPending() { cancelEpoch++; for (const controller of controllers) controller.abort(); controllers.clear(); }
+    function disconnect() { token = ''; cancelPending(); }
+    return { fullName: fullName.toLowerCase(), connect, readRemote, prepare, publish, getAsset, cancelPending, disconnect };
   }
   function localRecords(manifest, oldGarments, origin, preparedManifest = empty()) {
     const existing = new Map(oldGarments.map(g => [g.id, g]));

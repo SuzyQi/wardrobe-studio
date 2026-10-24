@@ -22,6 +22,8 @@
     auto: true, timer: null, message: '尚未连接 GitHub', conflict: null, authorization: null };
   const assetLoads = new Map(); let activeAssetLoads = 0, cacheWriteChain = Promise.resolve(); const assetQueue = [];
   const trustedImageCaches = new WeakMap();
+  const dirtyImageCaches = new Map();
+  function markImageCache(id) { dirtyImageCaches.set(id, (dirtyImageCaches.get(id) || 0) + 1); }
   function cacheIdentity(record, field) { return record.cloudOrigin + ':' + record.id + ':' + field + ':' + record.cloudAssets?.[field]?.sha; }
   function trustImage(record, field) {
     const blob = record[field]; if (!(blob instanceof Blob)) return;
@@ -30,6 +32,7 @@
   }
   function canRecoverImage(record, field) { return !!trustedImageCaches.get(record[field])?.has(cacheIdentity(record, field)); }
   function replaceRecoveredImage(record, field, oldBlob, blob) {
+    markImageCache(record.id);
     record[field] = blob; trustImage(record, field);
     for (const target of [garment(record.id), editing, viewed]) {
       if (target?.id === record.id && target[field] === oldBlob && cacheIdentity(target, field) === cacheIdentity(record, field)) { target[field] = blob; trustImage(target, field); }
@@ -76,7 +79,7 @@
     $('cloud-repository').textContent = cloud.saved.config.owner + '/' + cloud.saved.config.repo;
     $('cloud-sync-now').disabled = !cloud.client;
     $('cloud-disconnect').hidden = !cloud.client;
-    $('cloud-button-label').textContent = cloud.client ? (cloud.saved.dirty ? '待同步' : '已同步') : 'GitHub 同步';
+    $('cloud-button-label').textContent = cloud.client ? (cloud.message.startsWith('正在同步') ? '同步中' : cloud.saved.dirty ? '待同步' : '已同步') : 'GitHub 同步';
     $('cloud-last-sync').textContent = cloud.saved.lastSyncAt ? '上次同步：' + new Date(cloud.saved.lastSyncAt).toLocaleString('zh-CN') : '同步照片、单品档案和已保存的搭配。';
     $('archive-sync-status').textContent = !cloud.client ? '已保存到本机 · 连接 GitHub 后可同步到其他设备'
       : cloud.conflict ? '本机已保存 · 存在同步冲突，请在 GitHub 同步窗口处理'
@@ -139,8 +142,10 @@
     const current = garment(record.id);
     if (current?.cloudOrigin === record.cloudOrigin && current.cloudAssets?.[field]?.sha === reference.sha) {
       current[field] = blob;
+      markImageCache(current.id);
       if (!cloud.applying && !busy) {
-        cacheWriteChain = cacheWriteChain.catch(() => {}).then(() => localWrite([{ store: 'garments', value: current }]));
+        const version = dirtyImageCaches.get(current.id);
+        cacheWriteChain = cacheWriteChain.catch(() => {}).then(async () => { await localWrite([{ store: 'garments', value: current }]); if (dirtyImageCaches.get(current.id) === version) dirtyImageCaches.delete(current.id); });
         try { await cacheWriteChain; } catch { $('storage-status').textContent = '图片已加载，本机缓存未写入；云端仍保留图片'; }
       }
     }
@@ -190,13 +195,22 @@
     const layers = state.layers.filter(l => ids.has(l.garmentId));
     const checkpoint = { id: 'github-sync', config: { ...cloud.saved.config }, base: published.manifest, head: published.head,
       lastSyncAt: new Date().toISOString(), dirty: false, auto: cloud.auto };
+    const sameCachedRecord = (a, b) => {
+      if (!a || Object.keys(a).length !== Object.keys(b).length) return false;
+      return Object.keys(b).every(key => Object.hasOwn(a, key) && (a[key] instanceof Blob || b[key] instanceof Blob ? a[key] === b[key] : JSON.stringify(a[key]) === JSON.stringify(b[key])));
+    };
+    const oldGarments = new Map(state.garments.map(g => [g.id, g])), oldOutfits = new Map(state.outfits.map(o => [o.id, o]));
+    const changedGarments = nextGarments.filter(g => dirtyImageCaches.has(g.id) || !sameCachedRecord(oldGarments.get(g.id), g));
+    const cacheVersions = new Map(changedGarments.map(g => [g.id, dirtyImageCaches.get(g.id)]));
     const operations = [
       ...state.garments.filter(g => !ids.has(g.id)).map(g => ({ store: 'garments', type: 'delete', id: g.id })),
       ...state.outfits.filter(o => !outfitIds.has(o.id)).map(o => ({ store: 'outfits', type: 'delete', id: o.id })),
-      ...nextGarments.map(value => ({ store: 'garments', value })), ...nextOutfits.map(value => ({ store: 'outfits', value })),
+      ...changedGarments.map(value => ({ store: 'garments', value })),
+      ...nextOutfits.filter(o => !sameCachedRecord(oldOutfits.get(o.id), o)).map(value => ({ store: 'outfits', value })),
       { store: 'meta', value: checkpoint }, { store: 'meta', value: draftRecord({ ...snap(), layers, activeId: outfitIds.has(state.activeId) ? state.activeId : null }) }
     ];
     try { await localWrite(operations); } finally { cloud.applying = false; }
+    for (const [id, version] of cacheVersions) if (dirtyImageCaches.get(id) === version) dirtyImageCaches.delete(id);
     state.garments = nextGarments; state.outfits = nextOutfits; state.layers = layers; state.selected = null;
     if (!outfitIds.has(state.activeId)) state.activeId = null;
     state.history = []; state.future = []; cloud.saved = checkpoint; cloud.conflict = null;
@@ -218,11 +232,15 @@
     if (!cloud.client || busy || !state.ready) return;
     clearTimeout(cloud.timer); let conflicts = null;
     cloud.message = '正在同步至私有 GitHub 仓库…'; renderCloudStatus();
+    cloud.cancelled = false;
+    const checkCancellation = () => { if (cloud.cancelled) { const error = new Error('已停止本次同步，本机记录已保留；可稍后重试。'); error.name = 'SyncCancelled'; throw error; } };
+    $('cloud-sync-cancel').hidden = false; $('cloud-sync-cancel').disabled = false;
     try {
       await work('正在检查云端衣橱…', async () => {
         await draftChain;
+        checkCancellation();
         const client = cloud.client; await client.connect();
-        const remote = await client.readRemote();
+        const remote = await client.readRemote(); checkCancellation();
         if (!remote.exists && cloud.saved.base) throw new Error('云端衣橱文件缺失，本机记录已保留。请先在 GitHub 恢复 wardrobe.json，再重新同步。');
         const prepared = await client.prepare(state.garments, state.outfits, message => { $('busy-message').textContent = message; });
         let merged = Cloud.merge(cloud.saved.base, prepared, remote.manifest);
@@ -236,11 +254,14 @@
         }
         if (merged.conflicts.length) { conflicts = merged.conflicts; cloud.conflict = conflicts; cloud.message = '发现不同设备的修改，请选择保留版本'; return; }
         $('busy-message').textContent = '正在保存云端版本…';
-        const published = await client.publish(merged.manifest, remote);
+        const published = await client.publish(merged.manifest, remote, message => { $('busy-message').textContent = message; });
+        checkCancellation();
+        $('cloud-sync-cancel').disabled = true; $('busy-message').textContent = '正在更新本机记录…';
         await applyCloud(published, prepared, client);
         cloud.message = '已同步，照片和档案保存在私有仓库';
       });
-    } catch (error) { cloud.message = '同步未完成，本机记录已保留'; renderCloudStatus(); throw error; }
+    } catch (error) { cloud.message = error.name === 'SyncCancelled' ? '已暂停同步，本机记录已保留' : '同步未完成，本机记录已保留'; renderCloudStatus(); throw error; }
+    finally { $('cloud-sync-cancel').hidden = true; }
     renderCloudStatus();
     if (conflicts) showConflicts(conflicts);
   }
@@ -262,7 +283,7 @@
         toast(saved ? (mode === 'device' ? '已同步并记住此设备，下次打开自动连接。' : 'GitHub 已连接，衣橱已同步。') : '衣橱已同步，但浏览器未能保存授权；下次打开仍需重新输入。', !saved);
       }
     } catch (error) {
-      candidate.disconnect(); cloud.client = previousClient; cloud.saved = previousSaved; cloud.message = '连接或同步未完成，本机记录已保留'; renderCloudStatus(); throw error;
+      candidate.disconnect(); cloud.client = previousClient; cloud.saved = previousSaved; cloud.message = error.name === 'SyncCancelled' ? '已暂停同步，本机记录已保留' : '连接或同步未完成，本机记录已保留'; renderCloudStatus(); throw error;
     }
   }
   const urls = new Map();
@@ -288,7 +309,7 @@
     clearTimeout(toastTimer); $('toast').textContent = message; $('toast').hidden = false;
     $('toast').style.background = error ? '#77625f' : ''; toastTimer = setTimeout(() => { $('toast').hidden = true; }, error ? 6500 : 3200);
   }
-  function report(error) { console.error(error); toast(error?.message || '这次操作没有完成，请重试。', true); }
+  function report(error) { if (error?.name === 'SyncCancelled') { toast(error.message); return; } console.error(error); toast(error?.message || '这次操作没有完成，请重试。', true); }
   function listen(target, event, handler) {
     (typeof target === 'string' ? $(target) : target).addEventListener(event, e => {
       try { Promise.resolve(handler(e)).catch(report); } catch (error) { report(error); }
@@ -1069,6 +1090,7 @@
   listen('edit-main-color', 'change', () => { if (editing) { editing.mainColor = $('edit-main-color').value; editing.colorSource = 'manual'; $('edit-main-color-note').textContent = '已手动选择，保存档案后生效。'; } });
   listen('suggest-edit-color', 'click', async () => { if (!editing || busy) return; const target = editing; await work('正在建议主色…', async () => { let photo; try { photo = await ensureAsset(target, 'thumb'); } catch { photo = await ensureAsset(target, 'image'); } const suggestion = await colorSuggestion(photo); if (editing !== target) return; Object.assign(target, suggestion); colorSelect($('edit-main-color'), target.mainColor); $('edit-main-color-note').textContent = '已更新建议，保存档案后生效。'; }); });
   listen('bulk-brand-start', 'click', startBulkBrand);
+  listen('cloud-sync-cancel', 'click', () => { cloud.cancelled = true; $('cloud-sync-cancel').disabled = true; $('busy-message').textContent = '正在停止等待，本机记录会保留…'; cloud.client?.cancelPending(); });
   listen('bulk-brand-finish', 'click', finishBulkBrand);
   listen('bulk-brand-apply', 'click', applyBulkBrand);
   listen('bulk-brand-undo', 'click', undoBulkBrand);

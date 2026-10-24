@@ -22,6 +22,39 @@ const makeClient = api => Cloud.createClient({ owner: 'SuzyQi', repo: 'wardrobe-
 const garment = (id = 'g_1') => ({ id, name: 'The Simone', category: 'dresses', brand: 'Réalisation Par', purchasePrice: 100, originalPrice: 290, currency: 'GBP',
   aspect: .7, image: new Blob(['display'], { type: 'image/png' }), thumb: new Blob(['thumbnail'], { type: 'image/webp' }), original: new Blob(['original'], { type: 'image/jpeg' }),
   createdAt: '2024-06-26', updatedAt: '2024-06-26' });
+test('metadata-only sync sends one manifest entry, preserves all photos, and cached head checks avoid repeated downloads', async () => {
+  const api=fixture(), garments=Array.from({length:30},(_,i)=>garment('g_'+i));
+  const {client,result}=await publish(api,garments);const previousAssets=result.manifest.garments.map(g=>g.assets);
+  const before=api.requests.length,remote=await client.readRemote();
+  assert.equal(api.requests.length-before,1,'the unchanged head only needs a branch lookup');
+  const local=structuredClone(result.manifest);local.garments[0].brand='Jaded London';
+  const steps=[];await client.publish(local,remote,message=>steps.push(message));
+  const tree=api.requests.filter(r=>r.method==='POST'&&r.url.endsWith('/git/trees')).at(-1).body.tree;
+  assert.equal(tree.length,1);assert.equal(tree[0].path,'wardrobe.json');
+  assert.deepEqual(api.manifest().garments.map(g=>g.assets),previousAssets);
+  assert.equal(api.manifest().garments[0].brand,'Jaded London');assert.equal(steps.length,3);
+  const cached=await client.readRemote();cached.manifest.garments[0].brand='Caller mutation';
+  assert.equal((await client.readRemote()).manifest.garments[0].brand,'Jaded London');
+});
+test('stopping a pending cloud save leaves the last revision intact and the same authorization can retry', async () => {
+  const api=fixture(),{result}=await publish(api);let paused=false,entered;
+  const started=new Promise(resolve=>entered=resolve);
+  const client=Cloud.createClient({owner:'SuzyQi',repo:'wardrobe-studio-data',token:'unit-test-only',minWriteGap:0,fetch:async(url,options)=>{
+    if(paused&&url.endsWith('/git/trees')&&options.method==='POST') {entered();return await new Promise((resolve,reject)=>{options.signal.addEventListener('abort',()=>reject(new Error('aborted')),{once:true});});}
+    return api.fetch(url,options);
+  }});
+  await client.connect();const remote=await client.readRemote(),local=structuredClone(result.manifest);local.garments[0].brand='Chanel';
+  paused=true;const saving=client.publish(local,remote);await started;client.cancelPending();
+  await assert.rejects(saving,error=>error.name==='SyncCancelled');assert.equal(api.head,result.head);
+  paused=false;await client.publish(local,await client.readRemote());assert.equal(api.manifest().garments[0].brand,'Chanel');
+});
+test('stopping during image preparation prevents a later image upload', async () => {
+  const api=fixture(),client=makeClient(api);await client.connect();const g=garment();let release,entered;
+  const started=new Promise(resolve=>entered=resolve),bytes=g.image.arrayBuffer.bind(g.image);
+  Object.defineProperty(g.image,'arrayBuffer',{value:async()=>{entered();await new Promise(resolve=>release=resolve);return bytes();}});
+  const pending=client.prepare([g],[]);await started;client.cancelPending();release();
+  await assert.rejects(pending,error=>error.name==='SyncCancelled');assert.equal(api.requests.filter(r=>r.method==='POST').length,0);
+});
 async function publish(api, garments = [garment()], outfits = []) {
   const client = makeClient(api); await client.connect(); const remote = await client.readRemote(), local = await client.prepare(garments, outfits);
   const merged = Cloud.merge(null, local, remote.manifest); assert.equal(merged.conflicts.length, 0);
