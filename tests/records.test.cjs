@@ -201,6 +201,9 @@ test('bulk brand assignment and undo sync as complete batches to a second device
   const assets=JSON.stringify(api.manifest().garments.map(g=>g.assets)),before=api.commitCount;
   el['bulk-brand-start'].fire('click');bulkPick(app,'one');bulkPick(app,'two');bulkChoose(app,'Paloma Wool');
   el['bulk-brand-apply'].fire('click');await flush();assert.equal(el['cloud-button-label'].textContent,'待同步');
+  const commitsBeforeFinish=api.commitCount;
+  assert.equal(app.runSyncTimer(),true);await flush();assert.equal(api.commitCount,commitsBeforeFinish);assert.equal(el['busy-overlay'].open,false);
+  el['bulk-brand-finish'].fire('click');
   assert.equal(app.runSyncTimer(),true);await until(()=>el['cloud-button-label'].textContent==='已同步'||app.errors.length);
   assert.equal(api.commitCount,before+1);assert.deepEqual(api.manifest().garments.map(g=>g.brand),['Paloma Wool','Paloma Wool']);
   assert.equal(JSON.stringify(api.manifest().garments.map(g=>g.assets)),assets);
@@ -306,9 +309,28 @@ test('sync skips unchanged photo records and a brand-only save needs no second i
   assert.equal(app.writes.filter(w=>w.store==='garments').length,before);
   el['bulk-brand-start'].fire('click');bulkPick(app,'a');bulkChoose(app,'Chanel');el['bulk-brand-apply'].fire('click');await flush();
   const afterLocalSave=app.writes.filter(w=>w.store==='garments').length;assert.equal(afterLocalSave,before+1);
+  el['bulk-brand-finish'].fire('click');
   assert.equal(app.runSyncTimer(),true);await until(()=>el['cloud-button-label'].textContent==='已同步'||app.errors.length);
   assert.equal(app.writes.filter(w=>w.store==='garments').length,afterLocalSave);
   assert.equal(api.manifest().garments.find(g=>g.id==='a').brand,'Chanel');assert.deepEqual(app.errors,[]);
+});
+test('a clean reopened wardrobe reuses its photos and exposes stage timings without private details', async () => {
+  const api=fixture(),first=await start([{...oldGarment('secret-name'),image:new Blob(['image'],{type:'image/png'}),thumb:new Blob(['thumb'],{type:'image/webp'}),original:new Blob(['original'],{type:'image/jpeg'})}],{api});
+  await connect(first);const app=await start(first.memory.garments,{api,meta:first.memory.meta});await connect(app);
+  const report=textOf(app.elements['cloud-sync-timings']);
+  assert.match(report,/最近一次总耗时/);assert.match(report,/图片校验读取 0.0 MB/);assert.match(report,/复用 3 张/);assert.match(report,/新上传 0 张/);
+  assert.match(report,/读取云端资料/);assert.match(report,/写入本机记录/);assert.doesNotMatch(report,/unit-test-only|secret-name|Authorization/);
+  assert.equal(app.elements['sync-elapsed'].hidden,true);assert.deepEqual(app.errors,[]);
+});
+test('consecutive brand batches stay local while organizing, then sync together once on Done', async () => {
+  const api=fixture(),app=await start(['a','b'].map(id=>({...oldGarment(id),image:new Blob(['image'],{type:'image/png'}),thumb:new Blob(['thumb'],{type:'image/webp'}),original:new Blob(['original'],{type:'image/jpeg'})})),{api});
+  await connect(app);const before=api.commitCount,el=app.elements;
+  el['bulk-brand-start'].fire('click');bulkPick(app,'a');bulkChoose(app,'Gucci');el['bulk-brand-apply'].fire('click');await flush();
+  app.runSyncTimer();await flush();assert.equal(api.commitCount,before);
+  bulkPick(app,'b');bulkChoose(app,'Chanel');el['bulk-brand-apply'].fire('click');await flush();app.runSyncTimer();await flush();
+  assert.equal(api.commitCount,before);assert.equal(el['busy-overlay'].open,false);assert.match(el['bulk-brand-message'].textContent,/完成/);
+  el['bulk-brand-finish'].fire('click');assert.equal(app.runSyncTimer(),true);await until(()=>el['cloud-button-label'].textContent==='已同步'||app.errors.length);
+  assert.equal(api.commitCount,before+1);assert.deepEqual(api.manifest().garments.map(g=>g.brand),['Gucci','Chanel']);assert.deepEqual(app.errors,[]);
 });
 test('the sync wait screen can be stopped without losing a locally saved brand, then retried', async () => {
   const api=fixture(),app=await start([{...oldGarment('g_wait'),image:new Blob(['image'],{type:'image/png'}),thumb:new Blob(['thumb'],{type:'image/webp'}),original:new Blob(['original'],{type:'image/jpeg'})}],{api});

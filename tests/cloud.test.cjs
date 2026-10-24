@@ -36,6 +36,20 @@ test('metadata-only sync sends one manifest entry, preserves all photos, and cac
   const cached=await client.readRemote();cached.manifest.garments[0].brand='Caller mutation';
   assert.equal((await client.readRemote()).manifest.garments[0].brand,'Jaded London');
 });
+test('a fresh client reuses trusted immutable cached photos without reading bytes, but verifies same-size replacements', async () => {
+  const api=fixture(),source=Array.from({length:30},(_,i)=>garment('g_'+i));
+  const {result,local}=await publish(api,source);
+  const cached=Cloud.localRecords(result.manifest,source,'suzyqi/wardrobe-studio-data',local),trusted=new WeakSet();
+  for(const g of cached)for(const field of C.imageFields(g)){trusted.add(g[field]);Object.defineProperty(g[field],'arrayBuffer',{value:async()=>{throw new Error('trusted photo must not be reread');}});}
+  const client=Cloud.createClient({owner:'SuzyQi',repo:'wardrobe-studio-data',token:'unit-test-only',minWriteGap:0,fetch:api.fetch,canReuseAsset:(g,field)=>trusted.has(g[field])});
+  await client.connect();let stats;const prepared=await client.prepare(cached,[],(message,value)=>stats=value);
+  assert.equal(stats.read,0);assert.equal(stats.readBytes,0);assert.equal(stats.reused,90);assert.equal(stats.uploaded,0);
+  assert.deepEqual(prepared.garments.map(g=>g.assets),result.manifest.garments.map(g=>g.assets));
+  cached[0].image=new Blob(['changed'],{type:'image/png'});assert.equal(cached[0].image.size,source[0].image.size);
+  const changed=await client.prepare(cached,[],(message,value)=>stats=value);
+  assert.equal(stats.read,1);assert.equal(stats.uploaded,1);assert.equal(stats.reused,89);
+  assert.notEqual(changed.garments[0].assets.image.hash,result.manifest.garments[0].assets.image.hash);
+});
 test('stopping a pending cloud save leaves the last revision intact and the same authorization can retry', async () => {
   const api=fixture(),{result}=await publish(api);let paused=false,entered;
   const started=new Promise(resolve=>entered=resolve);

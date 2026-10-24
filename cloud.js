@@ -135,18 +135,22 @@
       remoteCache = { head: ref.object.sha, tree: commit.tree.sha, exists: !!entry, manifest };
       return { ...remoteCache, manifest: validateManifest(manifest) };
     }
-    async function asset(g, field) {
+    async function asset(g, field, stats) {
       const epoch = cancelEpoch;
       const old = g.cloudOrigin === fullName.toLowerCase() ? g.cloudAssets?.[field] : null;
       const blob = g[field];
       if (!blob) {
-        if (old) return validateAsset(old, g.id);
+        if (old) { stats.reused++; return validateAsset(old, g.id); }
         throw new Error('单品“' + g.name + '”的图片尚未加载。请先连接原来的数据仓库，导出完整备份后再迁移。');
       }
       if (!TYPES[blob.type] || !blob.size || blob.size > 25 * 1024 * 1024 || !ID.test(g.id)) throw new Error('单品图片格式或大小不受支持。');
-      if (prepared.get(blob)?.has(g.id)) return prepared.get(blob).get(g.id);
+      // Only an explicitly trusted, identical immutable Blob can skip reading and hashing.
+      // A replacement photo with an old cloud reference must still be verified/uploaded.
+      if (old && old.size === blob.size && old.type === blob.type && options.canReuseAsset?.(g, field)) { stats.reused++; return validateAsset(old, g.id); }
+      if (prepared.get(blob)?.has(g.id)) { stats.reused++; return prepared.get(blob).get(g.id); }
       const remember = value => { if (!prepared.has(blob)) prepared.set(blob, new Map()); prepared.get(blob).set(g.id, value); return value; };
       let bytes;
+      stats.read++; stats.readBytes += blob.size;
       try { bytes = new Uint8Array(await blob.arrayBuffer()); }
       catch (error) {
         if (!old || !options.canRecoverAsset?.(g, field)) throw error;
@@ -156,20 +160,23 @@
       }
       const hash = await digest(bytes);
       if (epoch !== cancelEpoch) throw cancelled();
-      if (old && old.hash === hash && old.type === blob.type) return remember(validateAsset(old, g.id));
+      if (old && old.hash === hash && old.type === blob.type) { stats.reused++; return remember(validateAsset(old, g.id)); }
       const created = await request('/git/blobs', { method: 'POST', body: { content: bytes64(bytes), encoding: 'base64' } });
       if (!SHA.test(created.sha)) throw new Error('GitHub 未返回有效的图片编号。');
+      stats.uploaded++; stats.uploadBytes += bytes.length;
       const result = { path: 'images/' + g.id + '/' + hash + '.' + TYPES[blob.type], sha: created.sha, hash, type: blob.type, size: blob.size };
       return remember(result);
     }
     async function prepare(garments, outfits, progress = () => {}) {
       const result = empty(), epoch = cancelEpoch;
+      const stats = { reused: 0, read: 0, uploaded: 0, readBytes: 0, uploadBytes: 0 };
       for (let i = 0; i < garments.length; i++) {
-        const g = garments[i]; progress('正在准备照片 ' + (i + 1) + ' / ' + garments.length + '…');
-        const assets = {}; for (const field of C.imageFields(g)) { assets[field] = await asset(g, field); if (epoch !== cancelEpoch) throw cancelled(); }
+        const g = garments[i]; progress('正在准备照片 ' + (i + 1) + ' / ' + garments.length + '…', { ...stats });
+        const assets = {}; for (const field of C.imageFields(g)) { assets[field] = await asset(g, field, stats); if (epoch !== cancelEpoch) throw cancelled(); }
         result.garments.push({ ...metadata(g), assets });
       }
       result.outfits = outfits.map(o => ({ ...o, layers: o.layers.map(l => ({ ...l })) }));
+      progress('图片准备完成', { ...stats });
       return validateManifest(result);
     }
     async function publish(manifest, remote, progress = () => {}) {

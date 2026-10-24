@@ -115,7 +115,7 @@
     clearTimeout(cloud.timer);
     if (!cloud.client || !cloud.auto || !cloud.saved.dirty || cloud.conflict) return;
     cloud.timer = setTimeout(() => {
-      if (busy || document.querySelector('dialog[open]:not(#archive-dialog)')) return scheduleCloud();
+      if (bulkBrand.active || busy || document.querySelector('dialog[open]:not(#archive-dialog)')) return scheduleCloud();
       syncCloud().catch(report);
     }, 3000);
   }
@@ -228,21 +228,40 @@
     }
     if ($('cloud-dialog').open) $('cloud-dialog').close(); $('cloud-conflict-dialog').showModal();
   }
+  function renderSyncTiming() {
+    const timing = cloud.timing; if (!timing) return;
+    const seconds = ms => (ms / 1000).toFixed(1) + ' 秒';
+    const rows = [...timing.stages];
+    if (timing.current) rows.push({ label: timing.current, ms: Date.now() - timing.at });
+    const container = $('cloud-sync-timings'); container.replaceChildren();
+    container.append(node('p', '', (timing.finished ? '最近一次总耗时：' : '本次已等待：') + seconds((timing.ended || Date.now()) - timing.started)));
+    for (const row of rows) container.append(node('p', '', row.label + '：' + seconds(row.ms)));
+    if (timing.photos) container.append(node('p', '', '图片校验读取 ' + (timing.photos.readBytes / 1048576).toFixed(1) + ' MB · 复用 ' + timing.photos.reused + ' 张 · 新上传 ' + timing.photos.uploaded + ' 张'));
+    $('sync-elapsed').textContent = timing.finished ? '' : '已等待 ' + seconds(Date.now() - timing.started) + ' · ' + timing.current;
+  }
   async function syncCloud(resolutionPackage) {
     if (!cloud.client || busy || !state.ready) return;
     clearTimeout(cloud.timer); let conflicts = null;
     cloud.message = '正在同步至私有 GitHub 仓库…'; renderCloudStatus();
     cloud.cancelled = false;
+    const timing = cloud.timing = { started: Date.now(), at: Date.now(), current: '等待本机保存', stages: [] };
+    const phase = label => { if (timing.current) timing.stages.push({ label: timing.current, ms: Date.now() - timing.at }); timing.current = label; timing.at = Date.now(); renderSyncTiming(); };
+    let timingTimer;
+    const tick = () => { if (!timing.finished) { renderSyncTiming(); timingTimer = setTimeout(tick, 1000); } };
+    $('sync-elapsed').hidden = false; tick();
     const checkCancellation = () => { if (cloud.cancelled) { const error = new Error('已停止本次同步，本机记录已保留；可稍后重试。'); error.name = 'SyncCancelled'; throw error; } };
     $('cloud-sync-cancel').hidden = false; $('cloud-sync-cancel').disabled = false;
     try {
       await work('正在检查云端衣橱…', async () => {
         await draftChain;
         checkCancellation();
-        const client = cloud.client; await client.connect();
+        phase('连接 GitHub'); const client = cloud.client; await client.connect();
+        phase('读取云端资料');
         const remote = await client.readRemote(); checkCancellation();
         if (!remote.exists && cloud.saved.base) throw new Error('云端衣橱文件缺失，本机记录已保留。请先在 GitHub 恢复 wardrobe.json，再重新同步。');
-        const prepared = await client.prepare(state.garments, state.outfits, message => { $('busy-message').textContent = message; });
+        phase('图片校验与上传');
+        const prepared = await client.prepare(state.garments, state.outfits, (message, stats) => { $('busy-message').textContent = message; if (stats) timing.photos = stats; renderSyncTiming(); });
+        phase('合并衣橱资料');
         let merged = Cloud.merge(cloud.saved.base, prepared, remote.manifest);
         if (merged.conflicts.length && resolutionPackage) {
           const choices = {};
@@ -254,14 +273,16 @@
         }
         if (merged.conflicts.length) { conflicts = merged.conflicts; cloud.conflict = conflicts; cloud.message = '发现不同设备的修改，请选择保留版本'; return; }
         $('busy-message').textContent = '正在保存云端版本…';
-        const published = await client.publish(merged.manifest, remote, message => { $('busy-message').textContent = message; });
+        phase('检查云端变更');
+        const published = await client.publish(merged.manifest, remote, message => { $('busy-message').textContent = message; const labels = ['云端：建立目录', '云端：建立版本', '云端：确认保存']; const step = /（([123]) \/ 3）/.exec(message); if (step) phase(labels[Number(step[1]) - 1]); });
         checkCancellation();
         $('cloud-sync-cancel').disabled = true; $('busy-message').textContent = '正在更新本机记录…';
+        phase('写入本机记录');
         await applyCloud(published, prepared, client);
         cloud.message = '已同步，照片和档案保存在私有仓库';
       });
     } catch (error) { cloud.message = error.name === 'SyncCancelled' ? '已暂停同步，本机记录已保留' : '同步未完成，本机记录已保留'; renderCloudStatus(); throw error; }
-    finally { $('cloud-sync-cancel').hidden = true; }
+    finally { phase(''); timing.finished = true; timing.ended = Date.now(); clearTimeout(timingTimer); renderSyncTiming(); $('sync-elapsed').hidden = true; $('cloud-sync-cancel').hidden = true; }
     renderCloudStatus();
     if (conflicts) showConflicts(conflicts);
   }
@@ -270,7 +291,7 @@
     const config = remembered?.config || { owner: $('cloud-owner').value.trim(), repo: $('cloud-repo').value.trim(), token: $('cloud-token').value.trim() };
     $('cloud-token').value = '';
     const mode = remembered?.mode || ($('cloud-remember').checked ? 'device' : 'memory'), previousClient = cloud.client, previousSaved = cloud.saved;
-    const candidate = Cloud.createClient({ ...config, canRecoverAsset: canRecoverImage, onRecoveredAsset: replaceRecoveredImage });
+    const candidate = Cloud.createClient({ ...config, canRecoverAsset: canRecoverImage, canReuseAsset: canRecoverImage, onRecoveredAsset: replaceRecoveredImage });
     try {
       const same = (cloud.saved.config.owner + '/' + cloud.saved.config.repo).toLowerCase() === candidate.fullName;
       cloud.client = candidate; cloud.saved = { ...cloud.saved, config: { owner: config.owner, repo: config.repo }, base: same ? cloud.saved.base : null };
@@ -445,6 +466,7 @@
     Object.assign(state, bulkBrand.previous || {}); bulkBrand.previous = null;
     $('search').value = state.query; $('sort').value = state.sort; $('bulk-brand-error').hidden = true;
     renderCloset(); ( $('bulk-brand-start').hidden ? $('brand-filter') : $('bulk-brand-start') ).focus?.();
+    scheduleCloud();
   }
   async function applyBulkBrand() {
     if (busy || !bulkBrand.active) return;
@@ -461,7 +483,7 @@
         const updates = new Map(values.map(g => [g.id, g]));
         state.garments = state.garments.map(g => updates.get(g.id) || g);
         bulkBrand.undo = targets.map(g => ({ id: g.id, before: g.brand || '', applied: brand }));
-        bulkBrand.message = '已为 ' + values.length + ' 件衣服设置 ' + brand + ' · 本机已保存';
+        bulkBrand.message = '已为 ' + values.length + ' 件衣服设置 ' + brand + ' · 本机已保存' + (cloud.client && cloud.auto ? '，点击「完成」后统一同步' : '');
         bulkBrand.selected.clear();
         bindBrandChoice($('bulk-brand-choice'), $('bulk-brand-input'), '', renderBulkBrand);
         renderCloset(); refreshViewedArchive(); toast(bulkBrand.message + '，可撤销本次修改。');
