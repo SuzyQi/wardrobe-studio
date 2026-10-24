@@ -129,6 +129,88 @@ function openBook(app) { app.navigation.find(button => button.dataset.view === '
 function textOf(el) { return [el.textContent || '', ...el.children.map(textOf)].join(' '); }
 function bookGarment() { return { ...oldGarment('g_book'), brand: 'Zimmermann', name: '秀款露背旗袍', purchasePrice: 1500, currency: 'CNY', archive: { year: '2020', season: 'resort', relation: 'runway_match', verification: 'pending', sourceUrl: 'Vogue Runway / 卖家提供', story: '找到这件衣服的故事', photos: [{ id: 'p_runway', kind: 'runway', caption: '秀场参考图', sourceUrl: 'https://example.com/runway' }, { id: 'p_detail', kind: 'detail', caption: '面料与标签', sourceUrl: '' }] }, photo_p_runway: PNG, photo_p_detail: PNG }; }
 
+function bulkPick(app, id) {
+  const card = app.elements['garment-grid'].children.find(c => c.dataset.garmentId === id);
+  assert.ok(card, 'visible garment ' + id); find(card, 'bulk-brand-check').onclick();
+}
+function bulkChoose(app, brand) {
+  app.elements['bulk-brand-choice'].value = brand; app.elements['bulk-brand-choice'].fire('change');
+}
+test('bulk brand mode selects only unbranded clothes, saves atomically, preserves details, and restores browsing filters', async () => {
+  const records = [{ ...oldGarment('one'), purchasePrice: 100, notes: 'Keep', archive: bookGarment().archive, photo_p_runway: PNG, photo_p_detail: PNG }, oldGarment('two'), oldGarment('three'), { ...oldGarment('known'), brand: 'Chanel' }];
+  const original = structuredClone(records), app = await start(records), el = app.elements;
+  assert.equal(el['bulk-brand-start'].hidden, false); assert.equal(el['bulk-brand-start'].textContent, '补品牌 · 3');
+  assert.equal(el['bulk-brand-header'].hidden, true); assert.equal(el['bulk-brand-bar'].hidden, true);
+  el.search.value = 'known'; el.search.fire('input');
+  el['bulk-brand-start'].fire('click');
+  assert.equal(el.search.value, ''); assert.equal(el['brand-filter'].disabled, true);
+  assert.equal(el['garment-grid'].children.length, 3); assert.equal(el['bulk-brand-bar'].hidden, true);
+  bulkPick(app,'one'); bulkPick(app,'two');
+  assert.equal(el['bulk-brand-count'].textContent,'已选 2 件'); assert.equal(el['bulk-brand-apply'].disabled,true);
+  bulkChoose(app,'Jaded London'); assert.equal(el['bulk-brand-apply'].disabled,false);
+  el['bulk-brand-apply'].fire('click'); await flush();
+  assert.equal(records[0].brand,'Jaded London'); assert.equal(records[1].brand,'Jaded London');
+  assert.equal(records[2].brand,undefined); assert.equal(records[3].brand,'Chanel');
+  for(const key of ['image','thumb','original','purchasePrice','notes','photo_p_runway','photo_p_detail','createdAt']) assert.deepEqual(records[0][key],original[0][key],key);
+  assert.deepEqual(records[0].archive,C.archiveDetails(original[0].archive));
+  assert.equal(el['garment-grid'].children.length,1); assert.equal(el['bulk-brand-bar'].hidden,true);
+  assert.equal(el['bulk-brand-undo'].hidden,false);
+  const save = app.writes.filter(w=>w.store==='garments'); assert.equal(save.length,2);
+  assert.ok(app.writes.some(w=>w.store==='meta'&&w.value.id==='github-sync'&&w.value.dirty));
+  el['bulk-brand-finish'].fire('click');
+  assert.equal(el.search.value,'known'); assert.equal(el['brand-filter'].disabled,false); assert.equal(el['bulk-brand-header'].hidden,true);
+  el['bulk-brand-undo'].fire('click'); await flush();
+  assert.equal(records[0].brand,''); assert.equal(records[1].brand,'');
+  assert.equal(el['bulk-brand-start'].textContent,'补品牌 · 3');
+  assert.deepEqual(app.errors,[]);
+});
+test('bulk brand selection survives filters and image preview, custom brands normalize, and the all-done state is compact', async () => {
+  const records=[oldGarment('dress'),{...oldGarment('top'),category:'tops'}],app=await start(records),el=app.elements;
+  el['bulk-brand-start'].fire('click'); bulkPick(app,'dress');
+  find(el['garment-grid'].children[0],'garment-image-button').onclick();
+  assert.equal(el['archive-dialog'].open,true); el['archive-dialog'].close();
+  el.search.value='top'; el.search.fire('input');
+  assert.match(el['bulk-brand-count'].textContent,/筛选外 1 件/); bulkPick(app,'top');
+  bulkChoose(app,'__custom__'); assert.equal(el['bulk-brand-input'].hidden,false);
+  el['bulk-brand-input'].value='  my new label '; el['bulk-brand-input'].fire('input');
+  el['bulk-brand-apply'].fire('click'); await flush();
+  assert.deepEqual(records.map(g=>g.brand),['My New Label','My New Label']);
+  assert.equal(el['bulk-brand-empty'].hidden,false); assert.equal(el['no-results'].hidden,true);
+  el['bulk-brand-finish'].fire('click'); assert.equal(el['bulk-brand-start'].hidden,true); assert.equal(el['bulk-brand-bar'].hidden,true);
+  const reloaded=await start(records);assert.equal(reloaded.elements['bulk-brand-start'].hidden,true);
+  assert.deepEqual(app.errors,[]);
+});
+test('failed bulk save retains selection for retry; undo preserves later notes and skips changed brands', async () => {
+  const records=[oldGarment('one'),oldGarment('two')],options={failWrites:1},app=await start(records,options),el=app.elements;
+  el['bulk-brand-start'].fire('click');bulkPick(app,'one');bulkPick(app,'two');bulkChoose(app,'Gucci');
+  el['bulk-brand-apply'].fire('click');await flush();
+  assert.equal(records[0].brand,undefined);assert.equal(records[1].brand,undefined);
+  assert.equal(el['bulk-brand-error'].hidden,false);assert.equal(el['bulk-brand-count'].textContent,'已选 2 件');assert.equal(el['bulk-brand-undo'].hidden,true);
+  el['bulk-brand-apply'].fire('click');await flush();assert.equal(records[0].brand,'Gucci');
+  el['bulk-brand-finish'].fire('click');openRecord(app,0);el['edit-notes'].value='Later note';el['edit-form'].fire('submit');await flush();el['archive-dialog'].close();
+  openRecord(app,1);el['edit-brand'].value='Chanel';el['edit-form'].fire('submit');await flush();el['archive-dialog'].close();
+  options.failWrites=1;el['bulk-brand-undo'].fire('click');await flush();
+  assert.equal(records[0].brand,'Gucci');assert.equal(el['bulk-brand-undo'].hidden,false);
+  el['bulk-brand-undo'].fire('click');await flush();
+  assert.equal(records[0].brand,'');assert.equal(records[0].notes,'Later note');assert.equal(records[1].brand,'Chanel');
+  assert.equal(app.errors.length,2);
+});
+test('bulk brand assignment and undo sync as complete batches to a second device without reuploading photos', async () => {
+  const api=fixture(), records=['one','two'].map(id=>({...oldGarment(id),image:new Blob(['display'],{type:'image/png'}),thumb:new Blob(['thumb'],{type:'image/webp'}),original:new Blob(['original'],{type:'image/jpeg'})}));
+  const app=await start(records,{api});await connect(app);const el=app.elements;
+  const assets=JSON.stringify(api.manifest().garments.map(g=>g.assets)),before=api.commitCount;
+  el['bulk-brand-start'].fire('click');bulkPick(app,'one');bulkPick(app,'two');bulkChoose(app,'Paloma Wool');
+  el['bulk-brand-apply'].fire('click');await flush();assert.equal(el['cloud-button-label'].textContent,'待同步');
+  assert.equal(app.runSyncTimer(),true);await until(()=>el['cloud-button-label'].textContent==='已同步'||app.errors.length);
+  assert.equal(api.commitCount,before+1);assert.deepEqual(api.manifest().garments.map(g=>g.brand),['Paloma Wool','Paloma Wool']);
+  assert.equal(JSON.stringify(api.manifest().garments.map(g=>g.assets)),assets);
+  const phone=await start([],{api});await connect(phone);assert.deepEqual(phone.memory.garments.map(g=>g.brand),['Paloma Wool','Paloma Wool']);
+  el['bulk-brand-undo'].fire('click');await flush();assert.equal(app.runSyncTimer(),true);
+  await until(()=>el['cloud-button-label'].textContent==='已同步'||app.errors.length);
+  assert.deepEqual(api.manifest().garments.map(g=>g.brand),['','']);assert.equal(api.commitCount,before+2);
+  assert.deepEqual(app.errors,[]);
+});
+
 test('color chips combine colors with OR and brand/category/search with AND; reset restores all clothes', async()=>{
  const records=[{...oldGarment('blue'),brand:'COS',mainColor:'blue',color:'Navy'},{...oldGarment('white'),brand:'COS',mainColor:'white'},{...oldGarment('pink'),brand:'Other',mainColor:'pink'},oldGarment('pending')],app=await start(records),el=app.elements;
  const chip=id=>el['primary-color-list'].children.find(b=>b.dataset.color===id),count=()=>el['garment-grid'].children.filter(c=>c.className==='garment-card').length;

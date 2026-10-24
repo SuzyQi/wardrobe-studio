@@ -14,6 +14,7 @@
   const archiveInputs = { year: 'archive-year', season: 'archive-season', collection: 'archive-collection', look: 'archive-look', relation: 'archive-relation', verification: 'archive-verification', sourceUrl: 'archive-source', story: 'archive-story' };
   let staged = [], editing = null, viewed = null, processing = false, busy = false, toastTimer, draftTimer;
   let archiveBook = null, editingFromBook = false;
+  const bulkBrand = { active: false, selected: new Set(), previous: null, undo: null, message: '' };
   let requestedArchive = window.location?.search ? new URLSearchParams(window.location.search).get('garment') : null;
   let draftChain = Promise.resolve(), sliderStart = null;
   const Cloud = window.WardrobeCloud, rawLocalWrite = DB.write.bind(DB);
@@ -387,6 +388,83 @@
     select.value = state.brand;
     for (const brand of brandChoices()) { const suggestion = node('option'); suggestion.value = brand.label; $('brand-suggestions').append(suggestion); }
   }
+  function missingBrand(g) { return !C.formatBrand(g.brand); }
+  function renderBulkBrand() {
+    const missing = state.garments.filter(missingBrand);
+    const eligible = new Set(missing.map(g => g.id));
+    for (const id of bulkBrand.selected) if (!eligible.has(id)) bulkBrand.selected.delete(id);
+    $('bulk-brand-start').hidden = bulkBrand.active || !missing.length;
+    $('bulk-brand-start').textContent = '补品牌 · ' + missing.length;
+    $('bulk-brand-header').hidden = !bulkBrand.active;
+    $('bulk-brand-remaining').textContent = '还剩 ' + missing.length + ' 件 · 勾选同品牌的衣服';
+    $('brand-filter').disabled = bulkBrand.active;
+    $('workspace').classList.toggle('bulk-brand-mode', bulkBrand.active);
+    $('bulk-brand-empty').hidden = !bulkBrand.active || !!missing.length;
+    $('bulk-brand-bar').hidden = !bulkBrand.active || !bulkBrand.selected.size || state.view !== 'closet';
+    const visible = new Set([...$('garment-grid').children].map(card => card.dataset?.garmentId));
+    const outside = [...bulkBrand.selected].filter(id => !visible.has(id)).length;
+    $('bulk-brand-count').textContent = '已选 ' + bulkBrand.selected.size + ' 件' + (outside ? '（筛选外 ' + outside + ' 件）' : '');
+    $('bulk-brand-apply').disabled = !bulkBrand.selected.size || !$('bulk-brand-input').value.trim();
+    $('bulk-brand-notice').hidden = !bulkBrand.message;
+    $('bulk-brand-message').textContent = bulkBrand.message;
+    $('bulk-brand-undo').hidden = !bulkBrand.undo;
+  }
+  function startBulkBrand() {
+    if (bulkBrand.active || busy) return;
+    bulkBrand.previous = { category: state.category, brand: state.brand, colors: [...state.colors], favorites: state.favorites, query: state.query, sort: state.sort };
+    bulkBrand.active = true; bulkBrand.selected.clear();
+    Object.assign(state, { category: 'all', brand: 'unbranded', colors: [], favorites: false, query: '' });
+    $('search').value = ''; $('bulk-brand-error').hidden = true;
+    bindBrandChoice($('bulk-brand-choice'), $('bulk-brand-input'), '', renderBulkBrand);
+    renderCloset(); $('bulk-brand-finish').focus?.();
+  }
+  function finishBulkBrand() {
+    if (!bulkBrand.active || busy) return;
+    bulkBrand.active = false; bulkBrand.selected.clear();
+    Object.assign(state, bulkBrand.previous || {}); bulkBrand.previous = null;
+    $('search').value = state.query; $('sort').value = state.sort; $('bulk-brand-error').hidden = true;
+    renderCloset(); ( $('bulk-brand-start').hidden ? $('brand-filter') : $('bulk-brand-start') ).focus?.();
+  }
+  async function applyBulkBrand() {
+    if (busy || !bulkBrand.active) return;
+    const brand = C.formatBrand($('bulk-brand-input').value).slice(0, 100);
+    if (!brand || !bulkBrand.selected.size) return;
+    $('bulk-brand-error').hidden = true;
+    try {
+      await work('正在补充品牌…', async () => {
+        await cacheWriteChain.catch(() => {});
+        const targets = state.garments.filter(g => bulkBrand.selected.has(g.id) && missingBrand(g));
+        if (!targets.length) { renderCloset(); return; }
+        const now = new Date().toISOString(), values = targets.map(g => ({ ...g, brand, updatedAt: now }));
+        await DB.write(values.map(value => ({ store: 'garments', value })));
+        const updates = new Map(values.map(g => [g.id, g]));
+        state.garments = state.garments.map(g => updates.get(g.id) || g);
+        bulkBrand.undo = targets.map(g => ({ id: g.id, before: g.brand || '', applied: brand }));
+        bulkBrand.message = '已为 ' + values.length + ' 件衣服设置 ' + brand + ' · 本机已保存';
+        bulkBrand.selected.clear();
+        bindBrandChoice($('bulk-brand-choice'), $('bulk-brand-input'), '', renderBulkBrand);
+        renderCloset(); refreshViewedArchive(); toast(bulkBrand.message + '，可撤销本次修改。');
+      });
+    } catch (error) { $('bulk-brand-error').textContent = '本次未保存：' + error.message; $('bulk-brand-error').hidden = false; throw error; }
+  }
+  async function undoBulkBrand() {
+    if (busy || !bulkBrand.undo) return;
+    $('bulk-brand-error').hidden = true;
+    try {
+      await work('正在撤销品牌修改…', async () => {
+        await cacheWriteChain.catch(() => {});
+        const pending = new Map(bulkBrand.undo.map(g => [g.id, g]));
+        // Revert only our brand assignment. Preserve later edits and never recreate deleted clothes.
+        const values = state.garments.filter(g => pending.has(g.id) && g.brand === pending.get(g.id).applied)
+          .map(g => ({ ...g, brand: pending.get(g.id).before, updatedAt: new Date().toISOString() }));
+        if (values.length) await DB.write(values.map(value => ({ store: 'garments', value })));
+        const updates = new Map(values.map(g => [g.id, g]));
+        state.garments = state.garments.map(g => updates.get(g.id) || g);
+        bulkBrand.undo = null; bulkBrand.message = values.length ? '已撤销 ' + values.length + ' 件衣服的品牌修改' : '这些衣服的品牌已再次修改，本次未覆盖。';
+        renderCloset(); refreshViewedArchive(); toast(bulkBrand.message);
+      });
+    } catch (error) { $('bulk-brand-error').textContent = '撤销未完成：' + error.message; $('bulk-brand-error').hidden = false; throw error; }
+  }
   function colorSelect(select, value) {
     select.replaceChildren(); for (const c of K.COLORS) { const o = node('option', '', c.label); o.value = c.id; select.append(o); } select.value = value || 'unknown';
   }
@@ -439,20 +517,23 @@
     $('closet-value-note').textContent = value.count ? '已购入 ' + value.count + ' 件 · 实付已记录 ' + value.pricedCount + ' 件 · ' + value.unpricedCount + ' 件未填 · 原价已记录 ' + value.originalCount + ' 件。想买与示例不计入，不同币种分别统计。' : '填写实际购入价后自动汇总。仅统计已购入单品，想买与示例不计入；不同币种分别统计。';
   }
   function renderCloset() {
+    if (bulkBrand.active) state.brand = 'unbranded';
     renderTabs(); renderBrands(); renderColorFilters(); renderValue(); $('garment-count').textContent = state.garments.length;
     $('favorite-filter').setAttribute('aria-pressed', String(state.favorites));
-    let items = state.garments.filter(g => (state.category === 'all' || state.category === g.category) && C.matchesBrand(g, state.brand) &&
+    let items = state.garments.filter(g => (!bulkBrand.active || missingBrand(g)) && (state.category === 'all' || state.category === g.category) && C.matchesBrand(g, state.brand) &&
       (!state.favorites || g.favorite) && K.matches(g, state.colors) && (!state.query || C.matchesGarment(g, state.query)));
     items.sort((a, b) => state.sort === 'name' ? a.name.localeCompare(b.name, 'zh-CN') : state.sort === 'category' ? a.category.localeCompare(b.category) || a.name.localeCompare(b.name, 'zh-CN') : b.createdAt.localeCompare(a.createdAt));
     const grid = $('garment-grid'); grid.replaceChildren();
     const allEmpty = state.garments.length === 0;
     $('closet-empty').hidden = !allEmpty; $('no-results').hidden = allEmpty || items.length > 0;
-    grid.hidden = allEmpty || items.length === 0; $('closet-tip').hidden = allEmpty || !items.length;
+    if (bulkBrand.active && !state.garments.some(missingBrand)) $('no-results').hidden = true;
+    grid.hidden = allEmpty || items.length === 0; $('closet-tip').hidden = bulkBrand.active || allEmpty || !items.length;
     const filtering = state.category !== 'all' || state.brand || state.colors.length || state.favorites || state.query;
     $('filter-summary').hidden = !filtering || allEmpty;
     const filteredValue = C.wardrobeValue(items);
     const subtotal = filteredValue.totals.filter(g => g.purchaseTotal !== null).map(g => C.formatMoney(g.purchaseTotal, g.currency)).join('、');
     $('filter-summary').textContent = '找到 ' + items.length + ' 件单品' + (state.colors.length ? ' · 主色：' + state.colors.map(K.label).join('、') : '') + ' · 已购入实付小计：' + (subtotal || '未记录') + (filteredValue.unpricedCount ? ' · ' + filteredValue.unpricedCount + ' 件未填实付价' : '');
+    if (bulkBrand.active) $('filter-summary').textContent = '当前显示 ' + items.length + ' 件未填品牌的衣服';
     for (const g of items) {
       const card = node('article', 'garment-card'); card.dataset.garmentId = g.id;
       const visual = node('div', 'garment-visual');
@@ -467,7 +548,15 @@
       };
       const edit = action('编辑' + g.name, 'edit', 'icon-button card-edit'); edit.onclick = () => openEdit(g.id);
       const add = action('加入搭配：' + g.name, 'plus', 'card-add'); add.onclick = () => addLayer(g.id);
-      visual.append(imageButton, favorite, edit, add); if (g.demo) visual.append(node('span', 'demo-badge', 'DEMO'));
+      visual.append(imageButton);
+      if (bulkBrand.active) {
+        const check = node('button', 'bulk-brand-check'); check.type = 'button'; check.setAttribute('role', 'checkbox');
+        check.setAttribute('aria-label', '选择衣服：' + g.name);
+        const paint = () => { const selected = bulkBrand.selected.has(g.id); check.setAttribute('aria-checked', String(selected)); check.textContent = selected ? '✓' : ''; card.dataset.bulkSelected = String(selected); };
+        check.onclick = () => { if (bulkBrand.selected.has(g.id)) bulkBrand.selected.delete(g.id); else bulkBrand.selected.add(g.id); paint(); renderBulkBrand(); };
+        paint(); visual.append(check);
+      } else visual.append(favorite, edit, add);
+      if (g.demo) visual.append(node('span', 'demo-badge', 'DEMO'));
       const heading = node('h3', 'garment-name'), title = node('button', 'garment-title', g.name);
       title.type = 'button'; title.setAttribute('aria-label', '查看藏品档案：' + g.name); title.onclick = () => openArchive(g.id); heading.append(title);
       card.append(visual, heading);
@@ -493,16 +582,18 @@
       }
       grid.append(card);
     }
-    if (items.length) {
+    if (items.length && !bulkBrand.active) {
       const tile = node('button', 'upload-tile'); tile.type = 'button'; tile.append(icon('plus'), node('span', '', '放进衣橱')); tile.onclick = pickFiles; grid.append(tile);
     }
     if (state.view === 'book') archiveBook?.render(state.garments);
     $('remove-demo').hidden = !state.garments.some(g => g.demo); cleanupUrls();
+    renderBulkBrand();
     if (state.ready && requestedArchive && garment(requestedArchive)) {
       const id = requestedArchive; requestedArchive = null; openArchive(id);
     }
   }
   function setView(value) {
+    if (value !== 'closet' && bulkBrand.active) finishBulkBrand();
     state.view = value; $('workspace').hidden = value !== 'closet'; $('outfits-view').hidden = value !== 'outfits'; $('book-view').hidden = value !== 'book';
     for (const b of document.querySelectorAll('[data-view]')) { b.classList.toggle('active', b.dataset.view === value); if (b.dataset.view === value) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current'); }
     if (value === 'outfits') renderOutfits();
@@ -977,7 +1068,12 @@
   $('busy-overlay').addEventListener('cancel', e => { if (!$('color-scan-cancel').hidden) { e.preventDefault(); colorScanCancelled = true; } });
   listen('edit-main-color', 'change', () => { if (editing) { editing.mainColor = $('edit-main-color').value; editing.colorSource = 'manual'; $('edit-main-color-note').textContent = '已手动选择，保存档案后生效。'; } });
   listen('suggest-edit-color', 'click', async () => { if (!editing || busy) return; const target = editing; await work('正在建议主色…', async () => { let photo; try { photo = await ensureAsset(target, 'thumb'); } catch { photo = await ensureAsset(target, 'image'); } const suggestion = await colorSuggestion(photo); if (editing !== target) return; Object.assign(target, suggestion); colorSelect($('edit-main-color'), target.mainColor); $('edit-main-color-note').textContent = '已更新建议，保存档案后生效。'; }); });
-  listen('brand-filter', 'change', e => { state.brand = e.target.value; renderCloset(); });
+  listen('bulk-brand-start', 'click', startBulkBrand);
+  listen('bulk-brand-finish', 'click', finishBulkBrand);
+  listen('bulk-brand-apply', 'click', applyBulkBrand);
+  listen('bulk-brand-undo', 'click', undoBulkBrand);
+  listen('bulk-brand-clear', 'click', () => { bulkBrand.selected.clear(); renderCloset(); });
+  listen('brand-filter', 'change', e => { state.brand = bulkBrand.active ? 'unbranded' : e.target.value; renderCloset(); });
   listen('sort', 'change', e => { state.sort = e.target.value; renderCloset(); });
   listen('favorite-filter', 'click', () => { state.favorites = !state.favorites; renderCloset(); });
   listen('reset-filters', 'click', () => { state.category = 'all'; state.brand = ''; state.colors = []; state.favorites = false; state.query = ''; $('search').value = ''; renderCloset(); });

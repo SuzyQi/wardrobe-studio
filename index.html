@@ -24,8 +24,8 @@
   <script src="./cloud.js?v=20261023-brands" defer></script>
   <script src="./memorial.js?v=20261020-image-bytes" defer></script>
   <script src="./archive-book.js?v=20261020-magazine" defer></script>
-  <script src="./app.js?v=20261024-jaded-london" defer></script>
-<link rel="stylesheet" href="./ui-theme.css?v=20261023-brand-choice">
+  <script src="./app.js?v=20261024-bulk-brands" defer></script>
+<link rel="stylesheet" href="./ui-theme.css?v=20261024-bulk-brands">
 </head>
 <body>
 <svg class="icon-definitions" aria-hidden="true"><defs>
@@ -67,10 +67,15 @@
         <div id="primary-color-list" class="primary-color-list" role="group" aria-label="主色，可多选"></div>
         <p id="primary-color-status" class="primary-color-status" role="status">可多选颜色，再结合品牌和分类筛选。</p>
       </section>
-      <div class="brand-filter-row"><label for="brand-filter">品牌</label><select id="brand-filter"><option value="">全部品牌</option></select></div>
+      <div class="brand-filter-row"><label for="brand-filter">品牌</label><select id="brand-filter"><option value="">全部品牌</option></select><button id="bulk-brand-start" class="text-button" type="button" hidden>补品牌</button></div>
+      <div id="bulk-brand-header" class="bulk-brand-header" hidden><div><strong>补品牌</strong><p id="bulk-brand-remaining"></p></div><button id="bulk-brand-finish" class="button secondary" type="button">完成</button></div>
       <div id="category-tabs" class="category-tabs" aria-label="衣服分类"></div>
       <p id="filter-summary" class="filter-summary" hidden></p>
+      <div id="bulk-brand-notice" class="bulk-brand-notice" role="status" hidden><span id="bulk-brand-message"></span><button id="bulk-brand-undo" class="text-button" type="button" hidden>撤销本次修改</button></div>
+      <p id="bulk-brand-error" class="error" role="alert" hidden></p>
+      <p id="bulk-brand-empty" class="bulk-brand-empty" role="status" hidden>品牌已全部补齐。点击「完成」返回衣橱。</p>
       <div id="garment-grid" class="garment-grid" aria-live="polite"></div>
+      <div id="bulk-brand-bar" class="bulk-brand-bar" role="region" aria-label="批量设置品牌" hidden><div class="bulk-brand-selection"><span id="bulk-brand-count" role="status"></span><button id="bulk-brand-clear" class="text-button" type="button">取消选择</button></div><div class="bulk-brand-fields"><label class="sr-only" for="bulk-brand-choice">批量选择品牌</label><select id="bulk-brand-choice" aria-label="批量选择品牌"></select><input id="bulk-brand-input" aria-label="手动输入批量品牌" maxlength="100" list="brand-suggestions" placeholder="输入其他品牌" hidden></div><button id="bulk-brand-apply" class="button primary" type="button" disabled>应用</button></div>
       <div id="closet-empty" class="empty-state" hidden><div class="empty-closet" aria-hidden="true"><div class="rail"><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg><svg class="icon"><use href="#i-hanger"/></svg></div></div><h3>从一件喜欢的衣服开始</h3><p>一次选多张照片，名字以后再想。<br>PNG、JPG、WebP 都可以放进来。</p><button class="button primary" data-upload><svg class="icon"><use href="#i-plus"/></svg>上传我的衣服</button><button class="text-button" id="load-demo">先用 8 件示例试搭 <span aria-hidden="true">↗</span></button></div>
       <div id="no-results" class="empty-state small-empty" hidden><svg class="icon"><use href="#i-search"/></svg><h3>暂时没有找到这件衣服</h3><p>试试别的关键词，或清除筛选。</p><button class="button secondary" id="reset-filters">显示全部衣服</button></div>
       <p class="closet-tip" id="closet-tip" hidden><svg class="icon"><use href="#i-plus"/></svg>点名称查看档案；点 ＋ 加入搭配画布。</p>
